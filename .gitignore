@@ -1,0 +1,9 @@
+.DS_Store
+*.bak
+*.swp
+__pycache__/
+*.pyc
+
+# runtime state, never part of the skill itself
+.amqrc
+.agent-mail/
