@@ -44,6 +44,24 @@ git clone https://github.com/falkolab/agent-mail-skill ~/.claude/skills/agent-ma
 `~/.claude/skills/` makes it available in every project. For one project only, clone into
 `<repo>/.claude/skills/agent-mail` instead.
 
+Register the delivery hooks once, for your user:
+
+```bash
+~/.claude/skills/agent-mail/scripts/amq-install-user-hooks.sh
+```
+
+That covers every repository on the machine, including ones created later and every
+worktree, with **nothing installed into any project**. It writes only its own entries and
+leaves other tools' hooks alone; `--check` reports what is registered and `--remove` takes
+it back out. In repositories without a `.amqrc` the hook exits silently in about 70 ms and
+spawns nothing.
+
+Two limits worth knowing. Cloud sessions (claude.ai/code) do not read your local settings —
+they read the repository's committed `.claude/settings.json` — so user-level hooks cover
+local sessions only. And if a project also registers these hooks itself, both fire: Claude
+Code merges hooks across settings levels and deduplicates only byte-identical commands.
+The installer warns when it finds such a project.
+
 Then set up each repository that should be able to send and receive:
 
 ```bash
@@ -61,19 +79,19 @@ Re-running is safe: it repairs what is missing and overwrites nothing.
 ## What it sets up
 
 ```
-<repo>/.amqrc                            project name, handle, peers (machine-local, not committed)
-<repo>/.agent-mail/                      the mailboxes and the whole correspondence
-<repo>/.claude/hooks/agent-mail/*.sh     vendored copies of the scripts — commit these
-<repo>/.claude/settings.json             the three delivery hooks — commit this
+<repo>/.amqrc          project name, handle, peers (machine-local, git-excluded)
+<repo>/.agent-mail/    the mailboxes and the whole correspondence (git-excluded)
 ```
 
-The hook command resolves its own path from the worktree root, so it holds nothing
-machine-specific. Commit `.claude/` and git distributes hooks and scripts to every working
-copy, including ones created later.
+That is all. Nothing is committed and no scripts are copied into the project: the hooks
+are registered once for your user and run the scripts from wherever you cloned this skill.
 
 The mailbox belongs to the **repository**, not to a working copy: it is located through
 `git rev-parse --git-common-dir`, so every worktree shares one mailbox without its own
-config.
+config. Inside a repository the hook looks only at that repository's own `.amqrc` and
+never above it — otherwise one stray `.amqrc` in `$HOME` would adopt every repository
+beneath it. A submodule therefore needs its own config; it does not inherit the
+superproject's.
 
 ## How delivery works
 

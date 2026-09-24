@@ -41,20 +41,24 @@ scripts locate it through `git rev-parse --git-common-dir`, so every copy — in
 created after the install — sees the same mailbox without its own `.amqrc` and without
 re-running the installer.
 
-**Hook registration travels with the repository.** The installer writes the hooks into the
-committed `.claude/settings.json` and the scripts into `.claude/hooks/agent-mail/`, and the
-hook command resolves its own path from `git rev-parse --show-toplevel`, so there is
-nothing machine-specific in it. Commit both and git distributes them to every working
-copy, including copies created later.
+**Hooks are registered once per user, not per project:**
 
-Until that commit lands, a new copy has no hooks: mail still works through explicit
-commands, but the reminders stay silent. Re-running `amq-setup-project.sh` on the main
-checkout walks every existing copy and fixes them in place.
+```bash
+amq-install-user-hooks.sh          # --check to inspect, --remove to undo
+```
 
-If there is no vendored copy in the repository, the hook looks the scripts up on `PATH`.
-`--add-path` appends the line to your shell profile, **but the current session will not
-see it**: Claude Code snapshots the shell at start, so a profile edit only reaches the
-next session. Restart it, or you will conclude that `PATH` does not work.
+That covers every repository on the machine and every worktree, including ones created
+later, with nothing installed into any project. Only `.amqrc` and `.agent-mail/` live in
+the repo, and both are git-excluded.
+
+Inside a repository the hook looks only at that repository's own `.amqrc` and never above
+it. Without that rule a single `.amqrc` in `$HOME` would adopt every repository beneath
+it and pour one project's mail into all the others. A submodule needs its own config.
+
+Two limits: cloud sessions read the repository's committed `.claude/settings.json`, not
+your user settings, so they are not covered; and if a project registers these hooks itself
+as well, both fire — Claude Code merges hooks across settings levels and deduplicates only
+byte-identical commands.
 
 ## Rules without exceptions
 
