@@ -19,7 +19,12 @@ amq-install-user-hooks.sh
 
 It registers the three delivery hooks for your user, covering every repository and
 worktree, now and later, and installs nothing into any project. It refuses if a project
-still registers the hooks itself, because both layers would fire.
+still carries its own registration, because both layers would fire.
+
+Nothing else registers hooks: a project can no longer be given its own, and a repository
+that still carries an old per-project installation is cleaned with
+`amq-uninstall-project-hooks.sh --dir <working copy>` — which removes the registrations
+and the vendored scripts and leaves the mailbox and `.amqrc` alone.
 
 **Then, once per repository** — this only creates the mailbox and the config; it does not
 register anything:
@@ -66,10 +71,11 @@ Inside a repository the hook looks only at that repository's own `.amqrc` and ne
 it. Without that rule a single `.amqrc` in `$HOME` would adopt every repository beneath
 it and pour one project's mail into all the others. A submodule needs its own config.
 
-Two limits: cloud sessions read the repository's committed `.claude/settings.json`, not
-your user settings, so they are not covered; and if a project registers these hooks itself
-as well, both fire — Claude Code merges hooks across settings levels and deduplicates only
-byte-identical commands.
+Registrations stack: user settings, a project's tracked settings and its local settings
+all fire, and Claude Code deduplicates only byte-identical commands — a vendored copy is a
+different path, so it always doubles. That is why the project layer is gone rather than
+merely discouraged. Cloud sessions are not covered either way: they clone a repository
+whose mailbox and `.amqrc` are git-excluded, so there is nothing for a hook to read.
 
 ## Rules without exceptions
 
