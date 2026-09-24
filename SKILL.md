@@ -77,12 +77,23 @@ different path, so it always doubles. That is why the project layer is gone rath
 merely discouraged. Cloud sessions are not covered either way: they clone a repository
 whose mailbox and `.amqrc` are git-excluded, so there is nothing for a hook to read.
 
-**Only LIVE layers stack.** An old per-project entry usually guards itself —
-`H="$(git rev-parse --show-toplevel)/.claude/hooks/agent-mail/amq-hook.sh"; [ -x "$H" ] && …`
-— so once the vendored script is gone the entry is dead text, not a dormant duplicate.
-Counting entries in settings files therefore tells you nothing on its own: check the pair,
-registration **and** file, or simply count how many inbox blocks arrive in one turn. A
-registration is not a firing.
+**Count the inbox blocks; do not reason about the command.** A registration is not a
+firing — an entry may guard itself with `[ -x "$H" ]` — but working out whether a given
+entry fires by reading it is unreliable, because these commands carry fallbacks:
+
+```
+H="$(git rev-parse --show-toplevel)/.claude/hooks/agent-mail/amq-hook.sh"; [ -x "$H" ]   || H="<skill>/scripts/amq-hook.sh"; [ -x "$H" ] && bash "$H" <mode> || true
+```
+
+Read only as far as the first guard and you conclude the entry is dead once the vendored
+script is gone; it is not, because the second branch points at the skill, which is always
+there. Two people made exactly that call on the same string, one of them by truncating it
+in the code that printed it.
+
+So: if you must read the command, read the **whole** chain including every fallback, and
+never from truncated output. Better, skip the reasoning — **count how many `[agent-mail]`
+blocks arrive in one turn.** Two blocks means two live registrations, whatever the files
+say.
 
 ## Rules without exceptions
 
