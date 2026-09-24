@@ -142,7 +142,11 @@ if [ "$REMOVE" = "1" ]; then
   for t in "${TARGETS[@]}"; do
     [ -d "$t" ] || continue
     "$HERE/amq-install-hooks.sh" --dir "$t" --remove 2>/dev/null | sed "s|^|  $(basename "$t"): |"
-    [ "$t" = "$DIR" ] || rm -f "$t/.amqrc"
+    # NEVER delete .amqrc here. This used to remove it from every target except
+    # $DIR, and in a bare layout $DIR is a working copy while the real config sits
+    # at the repository anchor — so --remove silently deleted the project's only
+    # config and killed delivery everywhere, while printing that the file was kept.
+    # Stray per-worktree copies have their own explicit flag: --prune-worktree-amqrc.
     rm -f "$t/.agent-mail/.hook-blocked-"* 2>/dev/null
   done
   cat <<EOF
