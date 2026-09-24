@@ -11,7 +11,18 @@ notification is `fsnotify`.
 
 ## Install and set up
 
-Never write the config by hand. One command per project, safe to re-run:
+**First, once per machine** — this is what makes mail arrive at all:
+
+```bash
+amq-install-user-hooks.sh
+```
+
+It registers the three delivery hooks for your user, covering every repository and
+worktree, now and later, and installs nothing into any project. It refuses if a project
+still registers the hooks itself, because both layers would fire.
+
+**Then, once per repository** — this only creates the mailbox and the config; it does not
+register anything:
 
 ```bash
 ~/.claude/skills/agent-mail/scripts/amq-setup-project.sh \

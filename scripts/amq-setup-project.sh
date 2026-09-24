@@ -12,7 +12,7 @@
 # Safe to re-run: it repairs what is missing and overwrites nothing.
 set -euo pipefail
 
-PROJECT=""; DIR=""; HANDLE=""; PEERS=(); SESSIONS=(); HOOKS=1; WORKTREES=1; REMOVE=0; ADDPATH=0; PRUNE=0
+PROJECT=""; DIR=""; HANDLE=""; PEERS=(); SESSIONS=(); HOOKS=0; WORKTREES=1; REMOVE=0; ADDPATH=0; PRUNE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT="$2"; shift 2 ;;
@@ -20,7 +20,8 @@ while [ $# -gt 0 ]; do
     --handle)  HANDLE="$2"; shift 2 ;;
     --peer)    PEERS+=("$2"); shift 2 ;;
     --session) SESSIONS+=("$2"); shift 2 ;;
-    --no-hooks)     HOOKS=0; shift ;;
+    --no-hooks)     HOOKS=0; shift ;;            # kept for compatibility; now the default
+    --project-hooks) HOOKS=1; shift ;;
     --no-worktrees) WORKTREES=0; shift ;;
     --remove)       REMOVE=1; shift ;;
     --add-path)     ADDPATH=1; shift ;;
@@ -287,10 +288,27 @@ done
 [ "${#WTS[@]}" -gt 0 ] && say "· worktrees: ${#WTS[@]}, no separate setup needed"
 
 # -- 6. delivery hooks ---------------------------------------------------
+# Registration belongs to amq-install-user-hooks.sh and to nothing else. It used to
+# happen here by default, which meant any later run of this script — from memory, from
+# an old README, in any repository — put the project layer back and the hooks fired
+# twice again, from two different copies of the script. Removing the instances was not
+# enough while the capability stayed the default; now the safe behaviour is the default
+# and the other one needs --project-hooks.
+USER_CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 if [ "$HOOKS" = "1" ]; then
+  say "· registering hooks IN THE PROJECT (--project-hooks)"
+  if grep -q 'amq-hook.sh' "$USER_CFG" 2>/dev/null; then
+    say "  ⚠ they are also registered at user level in $USER_CFG —"
+    say "    both layers fire, so every event will run twice, from two copies."
+  fi
   "$HERE/amq-install-hooks.sh" --dir "$DIR" | sed 's/^/  · /'
+elif grep -q 'amq-hook.sh' "$USER_CFG" 2>/dev/null; then
+  say "· hooks already registered at user level — nothing to install in the project"
 else
-  say "· hooks skipped (--no-hooks)"
+  say "· hooks are NOT registered yet — run this once, for your user:"
+  say "    $HERE/amq-install-user-hooks.sh"
+  say "  it covers every repository on this machine, including worktrees and"
+  say "  repositories created later, and installs nothing into any project."
 fi
 
 # -- 7. verification -----------------------------------------------------
