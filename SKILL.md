@@ -77,6 +77,13 @@ different path, so it always doubles. That is why the project layer is gone rath
 merely discouraged. Cloud sessions are not covered either way: they clone a repository
 whose mailbox and `.amqrc` are git-excluded, so there is nothing for a hook to read.
 
+**Only LIVE layers stack.** An old per-project entry usually guards itself —
+`H="$(git rev-parse --show-toplevel)/.claude/hooks/agent-mail/amq-hook.sh"; [ -x "$H" ] && …`
+— so once the vendored script is gone the entry is dead text, not a dormant duplicate.
+Counting entries in settings files therefore tells you nothing on its own: check the pair,
+registration **and** file, or simply count how many inbox blocks arrive in one turn. A
+registration is not a firing.
+
 ## Rules without exceptions
 
 **1. Pin the context before the first command.** Otherwise the answer lands in the root
