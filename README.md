@@ -63,7 +63,8 @@ Code merges hooks across settings levels and deduplicates only byte-identical co
 The installer warns when it finds such a project.
 
 Then give each repository a mailbox. This creates `.amqrc` and `.agent-mail/` and
-registers nothing — hook registration belongs to the command above and to nothing else:
+registers nothing: no script in this repository can register hooks inside a project, so
+there is exactly one layer and nothing can stack.
 
 ```bash
 ~/.claude/skills/agent-mail/scripts/amq-setup-project.sh \
