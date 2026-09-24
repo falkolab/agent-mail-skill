@@ -26,14 +26,21 @@ amq_repo_root() {
   local start="${1:-$PWD}" c d
   c=$(git -C "$start" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
   if [ -n "$c" ]; then
-    d=$(dirname "$c")
+    # Inside a repository only the repository's OWN anchor counts, and we never look
+    # above it. Walking further up would let one stray .amqrc — in $HOME, say — adopt
+    # every repository beneath it and pour that project's mail into all the others.
+    # It also keeps the no-op path free of subprocesses, which matters once the hook
+    # runs on every prompt in every project on the machine.
+    # A submodule therefore needs its own .amqrc; it does not inherit the superproject's.
+    d="${c%/*}"
     [ -f "$d/.amqrc" ] && { printf '%s' "$d"; return 0; }
     [ -f "$c/.amqrc" ] && { printf '%s' "$c"; return 0; }   # bare repository
+    return 1
   fi
   d="$start"                                   # outside git — walk up the tree
   while [ -n "$d" ] && [ "$d" != "/" ]; do
     [ -f "$d/.amqrc" ] && { printf '%s' "$d"; return 0; }
-    d=$(dirname "$d")
+    d="${d%/*}"
   done
   return 1
 }
