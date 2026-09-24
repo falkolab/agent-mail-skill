@@ -52,7 +52,29 @@ CWD=$(printf '%s' "$IN" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".
 [ -n "$CWD" ] && [ -d "$CWD" ] || exit 0
 DIR=$(amq_repo_root "$CWD" || true)
 # The project is not wired to AMQ — stay quiet. That is normal, not a breakage.
-[ -n "${DIR:-}" ] && [ -f "$DIR/.amqrc" ] || exit 0
+# But a mailbox with no config is NOT normal: mail keeps arriving into it and
+# nobody is told, and silence is indistinguishable from an empty inbox. Say it.
+if [ -z "${DIR:-}" ] || [ ! -f "$DIR/.amqrc" ]; then
+  ORPHANED=""
+  for c in "$CWD" "${DIR:-}"; do
+    [ -n "$c" ] && [ -d "$c/.agent-mail" ] && [ ! -f "$c/.amqrc" ] && ORPHANED="$c"
+  done
+  if [ -z "$ORPHANED" ]; then
+    g=$(git -C "$CWD" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    if [ -n "$g" ]; then
+      for c in "${g%/*}" "$g"; do
+        [ -d "$c/.agent-mail" ] && [ ! -f "$c/.amqrc" ] && ORPHANED="$c"
+      done
+    fi
+  fi
+  [ -n "$ORPHANED" ] && [ "$MODE" != "stop" ] && cat <<EOF
+[agent-mail] mailbox present but .amqrc is missing: $ORPHANED
+Mail is still being delivered there and nobody is being told — this silence is
+NOT an empty inbox. Restore the config:
+  amq-setup-project.sh --project <name> --dir <repo> --handle <handle> [--peer <n>=<path>]...
+EOF
+  exit 0
+fi
 cd "$DIR" 2>/dev/null || exit 0
 
 # From here on the project is DEFINITELY set up, so any failure has to be

@@ -30,18 +30,68 @@ CFG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CFG="$CFG_DIR/settings.json"
 
 MODE=install
+FORCE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --remove) MODE=remove; shift ;;
     --check)  MODE=check; shift ;;
+    --force)  FORCE=1; shift ;;
     -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
 [ -x "$HOOK" ] || { echo "not found or not executable: $HOOK" >&2; exit 1; }
+
+# Registrations stack: user + project-tracked + project-local all fire. Claude Code
+# deduplicates only byte-identical commands, and a vendored copy is a different path,
+# so installing on top of a project that registers its own hooks doubles every event —
+# and the two copies can be different versions of the script. A project that has put
+# its own house in order cannot see this layer, so we refuse rather than warn after
+# the damage: it is their sessions that change behaviour, not ours.
+scan_projects() {
+  python3 - <<'PY'
+import json, os
+seen = {os.getcwd()}
+try:
+    cfg = json.load(open(os.path.expanduser("~/.amqrc")))
+    for p in (cfg.get("peers") or {}).values():
+        seen.add(os.path.dirname(p))
+except Exception:
+    pass
+for d in sorted(seen):
+    print(d)
+PY
+}
+find_project_hooks() {
+  local d s
+  while IFS= read -r d; do
+    [ -d "$d" ] || continue
+    while IFS= read -r s; do
+      grep -q 'amq-hook.sh' "$s" 2>/dev/null && printf '%s\n' "$s"
+    done < <(find "$d" -maxdepth 5 \( -name 'settings.json' -o -name 'settings.local.json' \) \
+             -path '*/.claude/*' 2>/dev/null)
+  done <<< "$(scan_projects)"
+}
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 1; }
 mkdir -p "$CFG_DIR" 2>/dev/null || { echo "cannot create $CFG_DIR" >&2; exit 1; }
+
+if [ "$MODE" = "install" ] && [ "$FORCE" != "1" ]; then
+  CLASH=$(find_project_hooks | grep -v "^$CFG\$" || true)
+  if [ -n "$CLASH" ]; then
+    echo "refusing to install: these projects register the hooks themselves," >&2
+    echo "so every event would fire twice, from two different copies of the script:" >&2
+    printf '  %s\n' $CLASH >&2
+    echo >&2
+    echo "Remove the project-level registration first (it does NOT touch the mailbox" >&2
+    echo "or .amqrc), then run this again:" >&2
+    echo "  amq-setup-project.sh --remove --dir <repo>" >&2
+    echo "  rm -r <repo>/.claude/hooks/agent-mail" >&2
+    echo >&2
+    echo "Or --force if you understand the duplication and want it anyway." >&2
+    exit 6
+  fi
+fi
 
 HOOK="$HOOK" CFG="$CFG" MODE="$MODE" python3 <<'PY'
 import json, os, sys
