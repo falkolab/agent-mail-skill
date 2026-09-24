@@ -62,7 +62,8 @@ local sessions only. And if a project also registers these hooks itself, both fi
 Code merges hooks across settings levels and deduplicates only byte-identical commands.
 The installer warns when it finds such a project.
 
-Then set up each repository that should be able to send and receive:
+Then give each repository a mailbox. This creates `.amqrc` and `.agent-mail/` and
+registers nothing — hook registration belongs to the command above and to nothing else:
 
 ```bash
 ~/.claude/skills/agent-mail/scripts/amq-setup-project.sh \
