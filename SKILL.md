@@ -79,13 +79,16 @@ The hook only shows; you collect: `amq drain --include-body --limit 0`
 to the user. Until you collect it the reminder repeats, and `Stop` puts you back to work.
 In a project without hooks, drain yourself at the start and at the end of the turn.
 
-**The hook prints the subject and id of messages that are not yours:** `SHARED` (collab)
-and `ORPHAN` (a topic no window sits on) are printed in full. For mail in other windows'
-**claimed** topics there is only an `in other windows` counter, with no subjects and no
-ids; those are not to be touched. So a foreign topic on screen means collab or an
-unclaimed topic: read "The shared basket" first. Opening a message with `amq read --id`
-to find out whether it is yours takes it away from everyone sharing that mailbox,
-irreversibly.
+**"Deal with the mail" means YOUR mail.** If you have claimed a topic, the `unread: N` in
+the header counts only your own inbox, and everything else arrives as a bare
+`unclaimed elsewhere: N` line with no subjects and no ids. That is deliberate: it is not
+your job and it must not become your task. Do not go looking for those messages, and do
+not open one to see whether it is yours — `amq read --id` takes it away from every window
+sharing that mailbox, irreversibly.
+
+A window that has **not** claimed a topic is the one answering for the shared basket, and
+only it sees `SHARED` (collab) and `ORPHAN` (a topic no window sits on) in full, with the
+commands to claim and forward. See "The shared basket".
 
 **3. A session name is `[a-z0-9_-]` only.** Spaces and upper case are rejected
 (`ABC-123 Some Topic` → error). Always slugify, no branching: `abc-123-some-topic`.
@@ -135,6 +138,18 @@ A project has one mailbox, but **a session is a separate mailbox**, so a window 
 claimed its own topic gets its own inbox. Until a topic is claimed the window sits in the
 shared `collab` with everyone else — and they share one mailbox.
 
+**Asked which mailbox you are on?** One command answers it in full — project, handle,
+window, topic, and the absolute path of the mailbox:
+
+```bash
+amq-use.sh --show
+```
+
+Quote that output rather than paraphrasing. The word "session" is overloaded here: AMQ
+calls a topic a session, and the harness calls a window a session, and they are not the
+same thing. "Your mailbox" means the topic directory this window reads — the `mailbox:`
+line. The same path is printed in the hook's header on every turn.
+
 **First thing in a new window, claim a topic:**
 ```bash
 amq-use.sh "<any phrasing of the topic>"
@@ -163,10 +178,13 @@ amq send --to <their-handle> --project <their-project> --session <their-topic> .
 ```
 If you do not know who is claimed there, write to their `collab` — that always works.
 
-The hook splits the inbox into four parts: **YOURS** (your topic — it holds the turn),
-**SHARED** (collab — shown, but does not hold the turn), **ORPHAN** (a topic no window is
-bound to — printed in full, otherwise nobody would learn about the message), and an
-`in other windows` counter with no details.
+The hook splits the inbox by who is responsible for it. A window **with its own topic**
+sees **YOURS** in full — that is what holds the turn — and everything else as a single
+`unclaimed elsewhere: N` count, with no subjects and no ids, so it cannot be pulled off
+its task. A window **still in `collab`** is the one answering for unowned mail, so it also
+sees **SHARED** (collab) and **ORPHAN** (a topic no window is bound to) in full, with the
+commands to claim and forward. Mail in other windows' claimed topics is never detailed for
+anyone: just `in other windows: N`.
 
 ## The shared basket
 
@@ -193,6 +211,13 @@ amq-log.sh --all --body                     # the same plus neighbouring project
 
 ### Someone else's message
 
+**0. Whose job is this?** If you have claimed a topic of your own, the shared basket is
+**not yours to sort**. The hook shows you a bare count of what is waiting elsewhere, with
+no subjects and no ids, precisely so that it cannot pull you off your task. Leave it
+alone: some window will sit in `collab` and deal with it, and if none does, the user will
+say so. Act on the paragraphs below only when you are the window still in `collab`, or
+when the user asks you directly.
+
 **1. Another window's topic is not your zone.** Do not answer on the merits, do not take
 on the work described, do not decide for the window the message is addressed to. At most,
 get it to the addressee.
@@ -207,26 +232,21 @@ not a state, it is a pause.
 is nothing to put a message back into `collab` with: `amq` has no command that returns it
 to `new`. You can move the file by hand, but that returns the message to **everyone**,
 including the window that already read it: the `collab` mailbox is shared by the whole
-project. So — a copy into the addressee's topic, marked as a forward, with the sender's
-handle and the original id:
+project. So — a copy into the addressee's topic. One command does it:
 
 ```bash
-# thread, labels and kind of the original — from `amq list --cur --json` (after reading it is there)
-amq send --me <handle> --to <own-handle> --session <their-topic> \
-  --thread <original thread> --labels <original labels> \
-  --kind <same> --subject "Forwarded: <same>" \
-  --body "<body>
-
-  — forwarded. Original: from <handle>@<project>, id <id>."
+amq-return.sh <id> --to <their-topic> [--note "<one line>"]
 ```
 
-Do not pass `--root` here: it is banned under "Prohibitions" and makes no difference to
-delivery. `--session` requires a pinned context — that is rule 1, a pin on **your own**
-topic; without a pin the command refuses with `--session requires a session context`.
-Without explicit `--thread` and `--labels`, amq starts a new thread
-`p2p/<your-topic>:<handle>__<their-topic>:<handle>` and loses the labels. `reply_to` in
-the copy will still point at you, so name the original sender in the body: replying to
-them is `--to <handle> --project <project>`.
+It finds the message in your mailbox, carries over its thread, labels and kind, marks the
+copy as a forward, and names the original sender so the addressee knows who to answer.
+Run it from inside the repository.
+
+Doing it by hand is the same `amq send` with `--thread` and `--labels` copied from
+`amq list --cur --json`. Two traps if you do: without those two flags amq starts a fresh
+thread `p2p/<your-topic>:<handle>__<their-topic>:<handle>` and drops the labels, and
+`reply_to` in the copy points at **you**, not at the original sender — so the sender has
+to be named in the body. Never pass `--root` on a send; see "Prohibitions".
 
 The cost of a mistake: a message consumed by accident never comes back to the shared
 basket, and the addressee window never learns of it. That is why point 2 is a rule, not
