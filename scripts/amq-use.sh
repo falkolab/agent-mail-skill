@@ -38,10 +38,10 @@ say() { echo "$@" >&2; }
 command -v amq >/dev/null 2>&1 || { say "amq not found"; exit 1; }
 DIR=$(amq_repo_root) || { say "project is not connected to agent-mail (no .amqrc)"; exit 3; }
 
-IFS=$'\t' read -r ROOT ME <<<"$(python3 -c "
+IFS=$'\t' read -r ROOT ME PROJECT <<<"$(python3 -c "
 import json,sys
 c=json.load(open(sys.argv[1]+'/.amqrc'))
-print('\t'.join([c.get('root','.agent-mail'), c.get('handle','')]))" "$DIR")"
+print('\t'.join([c.get('root','.agent-mail'), c.get('handle',''), c.get('project','?')]))" "$DIR")"
 case "$ROOT" in /*) RP="$ROOT" ;; *) RP="$DIR/$ROOT" ;; esac
 [ -n "$ME" ] || { say "no handle in .amqrc — rerun amq-setup-project.sh"; exit 3; }
 
@@ -52,10 +52,23 @@ WIN="${AMQ_WINDOW:-${CLAUDE_CODE_SESSION_ID:-}}"
 STATE="$RP/.window-$(printf '%s' "$WIN" | tr -c 'A-Za-z0-9_.-' '_')"
 
 if [ "${1:-}" = "--show" ]; then
+  # Answers "which mailbox is this window on?" in full, so it can be quoted back to a
+  # human verbatim. Printing only the topic name left both sides guessing: AMQ calls a
+  # topic a "session", so does the harness, and they are not the same thing.
   cur=$(cat "$STATE" 2>/dev/null)
-  say "window: $WIN"
-  say "topic: ${cur:-(not claimed, you are in the shared collab)}"
-  [ -n "$cur" ] && echo "eval \"\$(amq env --session $cur --me $ME)\""
+  say "project:  $PROJECT"
+  say "handle:   $ME"
+  say "window:   $WIN"
+  if [ -n "$cur" ]; then
+    say "topic:    $cur"
+    say "mailbox:  $RP/$cur"
+    say "neighbours address it as: --project $PROJECT --session $cur"
+    echo "eval \"\$(amq env --session $cur --me $ME)\""
+  else
+    say "topic:    (none claimed — this window is in the shared collab)"
+    say "mailbox:  $RP/collab   — shared with every other unclaimed window here"
+    say "claim one: amq-use.sh \"<topic>\""
+  fi
   exit 0
 fi
 

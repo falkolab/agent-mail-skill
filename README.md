@@ -93,7 +93,13 @@ in the project, with no trace. There is no command that puts it back.
 
 To look at a message without consuming it, use `amq list --new --json`,
 `amq thread --id <thread> --include-body`, `amq monitor --peek`, or
-`scripts/amq-log.sh --all --body`.
+`scripts/amq-log.sh --all --body`. If you took one by mistake,
+`scripts/amq-return.sh <id> --to <topic>` forwards a copy to the topic that owns it —
+that is the only repair there is.
+
+A window that has claimed its own topic is never shown the subjects or ids of mail in
+other topics, only a count. Otherwise a session busy with something else gets pulled into
+sorting the shared basket, and reading a message to find out whose it is destroys it.
 
 [SKILL.md](SKILL.md) covers this and the rest of the rules. [references/commands.md](references/commands.md)
 is the command reference, split by what consumes and what does not.

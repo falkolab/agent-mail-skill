@@ -144,6 +144,27 @@ A message is a `.md` file: a JSON frontmatter (`id`, `from`, `to`, `thread`, `su
 - between projects: `p2p/<projectA>:<session>:<a>__<projectB>:<session>:<b>`
 - topical: your own stable id, the same in both projects, e.g. `decision/api-v2`, `gate/<topic>`
 
+## Repairing a message you took by mistake
+
+```bash
+amq-return.sh <id> --to <topic> [--note "<one line>"]
+```
+Forwards a copy into the topic that owns it, carrying the original thread, labels and
+kind, and naming the original sender so the addressee knows who to answer. Run it from
+inside the repository. There is no true "return": nothing puts a consumed message back
+into `new`, and moving the file by hand would return it to every window sharing that
+mailbox, including the one that already read it.
+
+## Which mailbox is this window on
+
+```bash
+amq-use.sh --show
+```
+Prints project, handle, window, topic and the absolute mailbox path. The same path is in
+the hook header every turn. Use this when asked "which mailbox / which session are you
+on" — "session" means a topic to AMQ and a window to the harness, so quote the labelled
+output instead of paraphrasing.
+
 ## Reading the exchange and identifying a message
 
 ```bash
