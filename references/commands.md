@@ -155,6 +155,19 @@ inside the repository. There is no true "return": nothing puts a consumed messag
 into `new`, and moving the file by hand would return it to every window sharing that
 mailbox, including the one that already read it.
 
+## Previewing one message
+
+```bash
+amq-peek.sh <id> [--lines N]      # metadata + body, consumes nothing (0 = whole body)
+```
+Reads the message file directly — it calls no `amq` subcommand at all, so it cannot
+consume. Use it before `amq-claim.sh` on anything in the shared basket. Exit `3` means the
+id is not in this mailbox.
+
+`amq who --json` is **unreliable** for discovering a neighbour's topics: in repositories
+with a `.claude/agents/` directory it returns `null` with exit code 0. Use
+`amq session list --root <peer>/.agent-mail --json` instead.
+
 ## Which mailbox is this window on
 
 ```bash

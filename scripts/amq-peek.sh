@@ -131,20 +131,22 @@ print(f"thread:   {clean(m.get('thread') or '-', 120)}")
 print(f"state:    {'UNREAD' if box == 'new' else 'ALREADY READ'}")
 print(f"subject:  {clean(m.get('subject') or '(no subject)')}")
 
-# Whether it looks addressed here. Senders often label a message with the addressee's
-# topic, so the label is the strongest signal available without reading anything.
+# A hint, not a verdict. Labels are the only field where a sender can name the
+# addressee's topic, and measured across 60 messages in live shared baskets they did so
+# in 4. So a match is worth acting on; the absence of one means almost nothing, and the
+# body below is what actually decides.
 if mine:
     if mine in labels:
-        verdict = f"labelled '{mine}' — addressed to THIS window's topic"
-    elif mine != "collab" and mine.lower() in str(m.get("subject", "")).lower():
-        verdict = f"subject names '{mine}' — probably this window's"
+        verdict = f"labelled '{mine}' — addressed to YOUR topic"
+    elif mine.lower() in str(m.get("subject", "")).lower():
+        verdict = f"subject names '{mine}' — likely yours"
     else:
-        verdict = (f"nothing ties it to your topic '{mine}' — treat as not yours "
-                   "unless the body says otherwise")
+        verdict = (f"no label or subject ties it to '{mine}'. That is the usual case and "
+                   "proves nothing — read the body to decide")
 else:
-    verdict = ("this window has claimed no topic, so nothing can tie a message to it — "
-               "claim one with amq-use.sh")
-print(f"relevance: {verdict}")
+    verdict = ("this window has claimed no topic, so nothing can be tied to it — "
+               "read the body, and claim a topic with amq-use.sh")
+print(f"hint:     {verdict}")
 
 lines = body.strip("\n").splitlines()
 shown = lines if LIMIT is None else lines[:LIMIT]
