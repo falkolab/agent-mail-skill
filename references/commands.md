@@ -166,9 +166,14 @@ mailbox, including the one that already read it.
 ```bash
 amq-peek.sh <id> [--lines N]      # metadata + body, consumes nothing (0 = whole body)
 ```
-Reads the message file directly — it calls no `amq` subcommand at all, so it cannot
-consume. Use it before `amq-claim.sh` on anything in the shared basket. Exit `3` means the
-id is not in this mailbox.
+Finds the file by globbing `<root>/*/agents/<handle>/inbox/{new,cur}/<id>.md` and reads it
+— it launches no subprocess at all, so it cannot consume and costs the same on a large
+mailbox as on a small one. It deliberately does not look in the sender's `outbox/sent`,
+where the same id also sits with the wrong box. Use it before `amq-claim.sh` on anything in
+the shared basket. Exit `3` means the id is not in this mailbox.
+
+The frontmatter carries more than `amq list --json` returns: `to[]`, `from_project`,
+`reply_to` and `refs` exist only there.
 
 `amq who --json` is **unreliable** for discovering a neighbour's topics: in repositories
 with a `.claude/agents/` directory it returns `null` with exit code 0. Use

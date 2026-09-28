@@ -243,6 +243,13 @@ it is the slow path: a window with a topic of its own sees only a count for it. 
 message with the topic you believe it belongs to, so whoever sorts the basket can route it
 without reading it.
 
+**A topic exists only after its window claimed it.** `amq session list` on a mailbox whose
+windows have claimed nothing returns exactly `collab`, and sending to a topic that does not
+exist is refused outright (`session "<name>" not found`). So "topic first, collab as the
+slow path" describes correspondence between windows that already know each other. First
+contact, and anything addressed to a window with no topic, goes through the basket — that
+is not a lapse of discipline on the sender's side, it is the only address there is.
+
 The hook splits the inbox by who is responsible for it. A window **with its own topic**
 sees **YOURS** in full — that is what holds the turn — and everything else as a single
 `unclaimed elsewhere: N` count, with no subjects and no ids, so it cannot be pulled off
