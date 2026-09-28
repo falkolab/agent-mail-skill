@@ -95,6 +95,14 @@ never from truncated output. Better, skip the reasoning — **count how many `[a
 blocks arrive in one turn.** Two blocks means two live registrations, whatever the files
 say.
 
+**How claims in this file are written.** Anything asserted about `amq` behaviour carries
+the conditions it was checked under — version, and the layout it was run against. A claim
+without them is a claim nobody can re-check, and several statements here were wrong
+precisely because they held only for the layout that happened to be at hand: an ordinary
+checkout rather than a bare repository, a directory outside `$HOME` rather than under it,
+a command string read to the first guard rather than to the end. If you verify something
+yourself, write the conditions next to it.
+
 ## Rules without exceptions
 
 **1. Pin the context before the first command.** Otherwise the answer lands in the root
@@ -152,7 +160,9 @@ will not say which one.
 `amq session list --root <peer>/.agent-mail --json` first. A missed name is a
 non-delivery. (`amq who --json` is the obvious-looking choice and is **unreliable**: in
 repositories that have a `.claude/agents/` directory it returns `null` with exit code 0 —
-success-looking, and empty. Verified on 0.80.1.)
+success-looking, and empty. Verified on 0.80.1 in two repositories that have a
+`.claude/agents/` directory; `amq session list` returned the real topics in the same
+moment.)
 
 ## Asking another project
 

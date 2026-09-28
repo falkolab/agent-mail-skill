@@ -1,7 +1,13 @@
 # AMQ — command reference
 
-Flags checked against `amq 0.80.1 --help` and verified by running them. A single dash in
-the help output (`-me`) and a double one (`--me`) are equivalent; below it is always double.
+Flags checked against `amq 0.80.1 --help` and verified by running them against disposable
+mailboxes in three layouts: an ordinary checkout, a bare repository with worktrees, and a
+mailbox in a plain directory outside any repository. A single dash in the help output
+(`-me`) and a double one (`--me`) are equivalent; below it is always double.
+
+The binary is one per machine, shared by every project. The hook warns once when the
+installed version differs from the one above, because an upgrade by anyone changes
+behaviour for everybody silently.
 
 ## Context
 
