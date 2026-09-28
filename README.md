@@ -55,15 +55,6 @@ worktree, with **nothing installed into any project**. It writes only its own en
 leaves other tools' hooks alone; `--check` reports what is registered and `--remove` takes
 it back out. In repositories without a `.amqrc` the hook exits silently in about 70 ms and
 spawns nothing.
-
-Cloud sessions (claude.ai/code) do not read your local settings — they read the
-repository's committed `.claude/settings.json` — so user-level hooks cover local sessions
-only.
-
-If a repository still carries a per-project registration from an older install, both fire:
-Claude Code merges hooks across settings levels and deduplicates only byte-identical
-commands. The installer refuses rather than stacking on top of one, and nothing here can
-create one any more — clean it with `scripts/amq-uninstall-project-hooks.sh`.
 The installer warns when it finds such a project.
 
 Then give each repository a mailbox. This creates `.amqrc` and `.agent-mail/` and
@@ -141,6 +132,9 @@ JSON payload on stdin, the reminder text on stdout.
 - No push into a running terminal. `amq wake` exists in AMQ and needs a real TTY; it does
   not work inside the Claude app, and this skill does not use it.
 - No delivery across machines. AMQ has `amq-bridge` for that; this skill assumes one host.
+- No cloud sessions. A mailbox lives beside the repository and is excluded from git, so a
+  clone made elsewhere — claude.ai/code included — has none, and the hook there has
+  nothing to read.
 
 ## Licence
 

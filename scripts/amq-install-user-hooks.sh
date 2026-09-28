@@ -16,9 +16,8 @@
 # repository it looks only at that repository's own .amqrc and never above it.
 #
 # Two things worth knowing before you run it:
-#  - Cloud sessions (claude.ai/code) do NOT read your local settings; they read the
-#    repository's committed .claude/settings.json. User-level hooks cover local
-#    sessions only.
+#  - Cloud sessions get no mail at all, wherever hooks are registered: the mailbox sits
+#    beside the repository and is excluded from git, so a clone made elsewhere has none.
 #  - If a project also registers these hooks in its own .claude/settings.json, BOTH
 #    fire: Claude Code merges hooks across settings levels and only deduplicates
 #    byte-identical commands. This script warns when it finds such a project.
