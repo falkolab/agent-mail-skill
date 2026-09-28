@@ -26,6 +26,13 @@ that still carries an old per-project installation is cleaned with
 `amq-uninstall-project-hooks.sh --dir <working copy>` — which removes the registrations
 and the vendored scripts and leaves the mailbox and `.amqrc` alone.
 
+**If you find an `amq-hook.sh` entry in a project's tracked `.claude/settings.json`, it is
+history, not a reinstall.** No script here can create one. It is either a checkout older
+than the removal, or a merge conflict in that file resolved in favour of the old side.
+Such an entry is also dead: it points at `<repo>/.claude/hooks/agent-mail/`, which the
+removal deleted, and it carries no fallback. Delete it and commit — you are removing a
+leftover, not disabling delivery, which comes from the user-level hooks.
+
 **Then, once per repository** — this only creates the mailbox and the config; it does not
 register anything:
 
