@@ -55,20 +55,41 @@ leaves other tools' hooks alone; `--check` reports what is registered and `--rem
 it back out. In repositories without a `.amqrc` the hook exits silently in about 70 ms and
 spawns nothing.
 
-Then give each repository a mailbox. This creates `.amqrc` and `.agent-mail/`, both
-excluded from git, and registers nothing.
+Then give each repository a mailbox. One run per repository, listing every repository it
+should be able to reach:
 
 ```bash
-~/.claude/skills/agent-mail/scripts/amq-setup-project.sh \
-  --project backend --dir ~/code/backend --handle backend-claude \
-  --peer frontend=~/code/frontend
+amq-setup-project.sh --project <name> --dir <repo> --handle <handle> \
+                     [--peer <their-name>=<their-repo>]...
 ```
 
-Run it **on both sides** — peering is bidirectional, and a one-sided one does not answer.
-The first run will say the neighbour is not configured yet; after the second the route
-converges and the script verifies it in both directions.
+(Examples below drop the `~/.claude/skills/agent-mail/scripts/` prefix for readability;
+the scripts are not on your `PATH` unless you put them there.)
 
-Re-running is safe: it repairs what is missing and overwrites nothing.
+`--project` is this repository's name in the mail. `--handle` is who sends and receives
+here; one per repository, so prefix it with the project to keep senders apart. `--peer`
+names a repository this one may write to, and **the name must be the peer's own
+`--project`** — otherwise the outbound route works and replies silently do not. The script
+checks that.
+
+Peering is mutual, so run it on both sides with the names mirrored:
+
+```bash
+# in the invoicing repo
+amq-setup-project.sh --project invoicing --dir ~/code/invoicing \
+                     --handle invoicing-claude --peer crm=~/code/crm
+
+# in the CRM repo
+amq-setup-project.sh --project crm --dir ~/code/crm \
+                     --handle crm-claude --peer invoicing=~/code/invoicing
+```
+
+The first run says the neighbour is not configured yet — expected, it is not there so far.
+After the second the route converges and the script verifies it in both directions.
+
+Re-running is safe: it repairs what is missing and overwrites nothing. That is also how you
+add a peer later, or fix the config after moving a repository, since peer paths are
+absolute.
 
 ## What it sets up
 
