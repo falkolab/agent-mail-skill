@@ -26,13 +26,28 @@ done
 [ -n "$MSG" ] || { echo "usage: amq-peek.sh <id> [--lines N]" >&2; exit 2; }
 command -v amq >/dev/null 2>&1 || { echo "amq not found in PATH" >&2; exit 1; }
 
-# Same anchor rule as the hook: the mailbox belongs to the repository.
-COMMON=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || {
-  echo "not inside a git repository" >&2; exit 1; }
-for c in "${COMMON%/*}" "$COMMON"; do
-  [ -f "$c/.amqrc" ] && { ANCHOR="$c"; break; }
-done
-[ -n "${ANCHOR:-}" ] || { echo "no .amqrc for this repository" >&2; exit 1; }
+# Same resolution as the hook: the mailbox belongs to the repository, and outside a
+# repository we walk up the tree. Requiring git broke the case the hook handles fine —
+# a mailbox in a plain directory, which is how a machine-level hub is set up.
+amq_anchor() {
+  local c d
+  c=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  if [ -n "$c" ]; then
+    d="${c%/*}"
+    [ -f "$d/.amqrc" ] && { printf '%s' "$d"; return 0; }
+    [ -f "$c/.amqrc" ] && { printf '%s' "$c"; return 0; }
+    return 1
+  fi
+  d="$PWD"
+  while [ -n "$d" ] && [ "$d" != "/" ]; do
+    [ -f "$d/.amqrc" ] && { printf '%s' "$d"; return 0; }
+    d="${d%/*}"
+  done
+  return 1
+}
+ANCHOR=$(amq_anchor) || {
+  echo "no .amqrc here and none above — this directory is not wired to agent-mail" >&2
+  exit 1; }
 
 eval "$(ANCHOR="$ANCHOR" python3 - <<'PY'
 import json, os, shlex
@@ -152,7 +167,12 @@ lines = body.strip("\n").splitlines()
 shown = lines if LIMIT is None else lines[:LIMIT]
 print("--- body (peek, nothing consumed) ---")
 for ln in shown:
-    print("| " + clean(ln, 200))
+    # clean() says "(empty)" for an empty string, which is right for a missing field and
+    # wrong for a blank line inside a body — it turned paragraph breaks into noise.
+    # --lines 0 means "show me the whole message", so it lifts the per-line cap too.
+    # Capping lines under an explicit request for everything is just a quieter truncation.
+    c = clean(ln, 100000 if LIMIT is None else 200)
+    print("| " + ("" if c == "(empty)" and not ln.strip() else c))
 if LIMIT is not None and len(lines) > LIMIT:
     print(f"| ...{len(lines) - LIMIT} more lines — amq-peek.sh {clean(want, 80)} --lines 0 for all")
 if not lines:

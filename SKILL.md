@@ -166,12 +166,23 @@ python3 -c 'import json;print(json.load(open(".amqrc")).get("peers",{}))'
 # 1. pin your own topic
 cd <repo> && eval "$(amq env --session <topic> --me <own-handle>)"
 
-# 2. ask — always into the neighbour's collab (it always exists)
-amq send --to <neighbour-handle> --project <neighbour-name> --session collab \
-  --kind question --labels <topic> \
+# 2. find out which topic they are on — DO NOT guess, and do not use `amq who --json`
+amq session list --root <path-to-neighbour>/.agent-mail --json
+
+# 3. write to that topic. A window that has claimed one sees only a COUNT for collab,
+#    with no subject and no id, so a message dropped there may never be looked at.
+amq send --to <neighbour-handle> --project <neighbour-name> --session <their-topic> \
+  --kind question --labels <their-topic> \
   --subject "<the question in one line>" --body "<context and what exactly you need>"
 
-# 3. the answer arrives by itself in <topic>, same thread. Collect your topic only:
+# ...only if you genuinely cannot tell which topic: their collab, which always exists.
+#    Label it with the topic you think it belongs to — that is the one field a sorter
+#    can route on without reading anything.
+amq send --to <neighbour-handle> --project <neighbour-name> --session collab \
+  --kind question --labels <topic-you-think-it-is> \
+  --subject "<the question in one line>" --body "<context and what exactly you need>"
+
+# 4. the answer arrives by itself in <topic>, same thread. Collect your topic only:
 amq drain --root <root>/<topic> --me <own-handle> --include-body --limit 0
 ```
 
@@ -227,7 +238,10 @@ amq send --to <own-handle> --session <their-topic> --kind question --subject "..
 amq who --root <path-to-neighbour>/.agent-mail      # their windows
 amq send --to <their-handle> --project <their-project> --session <their-topic> ...
 ```
-If you do not know who is claimed there, write to their `collab` — that always works.
+If you do not know who is claimed there, write to their `collab` — it always exists, but
+it is the slow path: a window with a topic of its own sees only a count for it. Label the
+message with the topic you believe it belongs to, so whoever sorts the basket can route it
+without reading it.
 
 The hook splits the inbox by who is responsible for it. A window **with its own topic**
 sees **YOURS** in full — that is what holds the turn — and everything else as a single

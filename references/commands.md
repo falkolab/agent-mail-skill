@@ -46,6 +46,12 @@ Useful: `--subject`, `--kind`, `--priority`, `--labels a,b`, `--thread <id>`,
 Without `--session`, a cross-project send goes to the **same-named** session at the
 neighbour. If there is none there, it is refused. So for `collab` always say it explicitly.
 
+**Prefer the addressee's topic over their `collab`.** A window that has claimed a topic
+sees collab only as a count, with no subject and no id — a message left there waits for
+whoever sorts the basket. Find the topic with
+`amq session list --root <peer>/.agent-mail --json`, and if you must use collab, put the
+likely topic in `--labels`: it is the one field a sorter can route on without reading.
+
 Send **file paths, not file contents**. The recipient will open them; if they have no
 access to your worktree, send a short diff.
 

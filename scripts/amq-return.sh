@@ -27,14 +27,28 @@ done
 [ -n "$MSG" ] && [ -n "$TO" ] || { echo "usage: amq-return.sh <id> --to <topic>" >&2; exit 2; }
 command -v amq >/dev/null 2>&1 || { echo "amq not found in PATH" >&2; exit 1; }
 
-# The mailbox belongs to the repository, exactly as the hook resolves it.
-COMMON=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || {
-  echo "not inside a git repository — run this from the repo that holds the mailbox" >&2; exit 1; }
-PARENT=$(dirname "$COMMON")
-for c in "$PARENT" "$COMMON"; do
-  [ -f "$c/.amqrc" ] && { ANCHOR="$c"; break; }
-done
-[ -n "${ANCHOR:-}" ] || { echo "no .amqrc found for this repository" >&2; exit 1; }
+# Same resolution as the hook: the mailbox belongs to the repository, and outside a
+# repository we walk up the tree. Requiring git broke the case the hook handles fine —
+# a mailbox in a plain directory, which is how a machine-level hub is set up.
+amq_anchor() {
+  local c d
+  c=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  if [ -n "$c" ]; then
+    d="${c%/*}"
+    [ -f "$d/.amqrc" ] && { printf '%s' "$d"; return 0; }
+    [ -f "$c/.amqrc" ] && { printf '%s' "$c"; return 0; }
+    return 1
+  fi
+  d="$PWD"
+  while [ -n "$d" ] && [ "$d" != "/" ]; do
+    [ -f "$d/.amqrc" ] && { printf '%s' "$d"; return 0; }
+    d="${d%/*}"
+  done
+  return 1
+}
+ANCHOR=$(amq_anchor) || {
+  echo "no .amqrc here and none above — this directory is not wired to agent-mail" >&2
+  exit 1; }
 
 eval "$(ANCHOR="$ANCHOR" python3 - <<'PY'
 import json, os, shlex
