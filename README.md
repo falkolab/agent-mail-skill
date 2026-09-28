@@ -56,10 +56,14 @@ leaves other tools' hooks alone; `--check` reports what is registered and `--rem
 it back out. In repositories without a `.amqrc` the hook exits silently in about 70 ms and
 spawns nothing.
 
-Two limits worth knowing. Cloud sessions (claude.ai/code) do not read your local settings —
-they read the repository's committed `.claude/settings.json` — so user-level hooks cover
-local sessions only. And if a project also registers these hooks itself, both fire: Claude
-Code merges hooks across settings levels and deduplicates only byte-identical commands.
+Cloud sessions (claude.ai/code) do not read your local settings — they read the
+repository's committed `.claude/settings.json` — so user-level hooks cover local sessions
+only.
+
+If a repository still carries a per-project registration from an older install, both fire:
+Claude Code merges hooks across settings levels and deduplicates only byte-identical
+commands. The installer refuses rather than stacking on top of one, and nothing here can
+create one any more — clean it with `scripts/amq-uninstall-project-hooks.sh`.
 The installer warns when it finds such a project.
 
 Then give each repository a mailbox. This creates `.amqrc` and `.agent-mail/` and
