@@ -146,14 +146,34 @@ $TRAIL"
 
 if out=$("$@" 2>&1); then
   echo "forwarded to topic '$TO': $M_SUBJECT"
-  echo "  thread and labels preserved; the original stays read in '$M_SESSION'"
+  echo "  thread, labels and kind preserved"
+
+  # Forwarding has to be ONE operation. This used to print "the original stays read"
+  # unconditionally, which was true only if you had claimed the message first — and the
+  # hook's own tail invites the other order ("saw something that was not yours? forward a
+  # copy"). Done that way it left TWO live messages: the copy in the addressee's topic and
+  # the original still unread in the basket, for the next window to answer a second time,
+  # while the script said the original had been read. So: take the original now that the
+  # copy has been delivered, and report what actually happened either way.
+  if [ "$M_BOX" = "new" ]; then
+    if amq read --root "$RP/$M_SESSION" --me "$ME" --id "$MSG" >/dev/null 2>&1; then
+      echo "  the original is now taken out of '$M_SESSION' — nobody will answer it twice"
+    else
+      echo "  ! the original is STILL UNREAD in '$M_SESSION' and I could not take it." >&2
+      echo "    Another window will pick it up and answer again. Take it by hand:" >&2
+      echo "    amq read --root $RP/$M_SESSION --me $ME --id $MSG" >&2
+    fi
+  else
+    echo "  the original was already read in '$M_SESSION'; nothing left behind"
+  fi
+
   if [ -n "$FROM_PROJECT" ]; then
     echo "  the addressee replies to the ORIGINAL sender: --to $M_FRM --project $FROM_PROJECT"
   else
     echo "  the addressee replies to the ORIGINAL sender: --to $M_FRM (same project)"
   fi
 else
-  echo "forward failed:" >&2
+  echo "forward failed — the original is untouched:" >&2
   printf '  %s\n' "$out" >&2
   exit 1
 fi

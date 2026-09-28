@@ -168,9 +168,19 @@ except Exception: raise SystemExit
 for s in d.get("sessions",[]): print(s.get("name",""))' 2>/dev/null)
 [ -n "$SESSIONS" ] || SESSIONS="collab"
 
+# A send WITHOUT --session lands in the base root, not in any topic, and
+# `amq session list` does not report the root — so that mail was invisible to this
+# hook and to everyone. The sender sees "Sent" and the recipient never learns of it.
+# It cost a real message in a neighbouring project. The root is listed explicitly.
+[ -d "$RP/agents/$ME/inbox/new" ] && SESSIONS="$SESSIONS
+(root)"
+
 ALL="[]"; LIST_ERR=0; BAD_SESSIONS=""
-for s in $SESSIONS; do
-  if ! rows=$(amq list --new --session "$s" --me "$ME" --json 2>/dev/null); then
+while IFS= read -r s; do
+  [ -n "$s" ] || continue
+  if [ "$s" = "(root)" ]; then
+    rows=$(amq list --new --root "$RP" --me "$ME" --json 2>/dev/null) || rows="[]"
+  elif ! rows=$(amq list --new --session "$s" --me "$ME" --json 2>/dev/null); then
     # The name reaches the text the model reads, so hold it to the same
     # alphabet AMQ allows for sessions — same class as the topic-name fix.
     # Same alphabet AMQ allows for sessions, and bounded: a long lowercase
@@ -192,7 +202,9 @@ for m in rows:
 print(json.dumps(acc, ensure_ascii=False))
 PY
 )
-done
+done <<SESSIONLIST
+$SESSIONS
+SESSIONLIST
 
 CLAIMED=$(cat "$RP"/.window-* 2>/dev/null | sort -u | tr '\n' ',')
 # An explicitly designated sorter, if the project named one: <root>/.sorter holds a

@@ -86,6 +86,11 @@ amq-log.sh --body                   # bodies, reads the files directly (see belo
 
 `--poll` is the fallback instead of fsnotify (network filesystems).
 
+**A send without `--session` lands in the mailbox ROOT, not in a topic**, and
+`amq session list` does not report the root — so such mail was invisible to the hook and
+to everyone, while the sender saw `Sent`. The hook now lists the root explicitly and shows
+it as session `(root)`. Always name the session when sending.
+
 ## Replying
 
 ```bash
@@ -156,8 +161,9 @@ A message is a `.md` file: a JSON frontmatter (`id`, `from`, `to`, `thread`, `su
 amq-return.sh <id> --to <topic> [--note "<one line>"]
 ```
 Forwards a copy into the topic that owns it, carrying the original thread, labels and
-kind, and naming the original sender so the addressee knows who to answer. Run it from
-inside the repository. There is no true "return": nothing puts a consumed message back
+kind, and naming the original sender so the addressee knows who to answer. It then takes
+the original out of the basket, because a forward that leaves it unread produces two live
+messages and the next window answers a second time. Run it from inside the repository. There is no true "return": nothing puts a consumed message back
 into `new`, and moving the file by hand would return it to every window sharing that
 mailbox, including the one that already read it.
 
