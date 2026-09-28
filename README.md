@@ -23,9 +23,8 @@ frontmatter written into the recipient's directory.
 
 ## Requirements
 
-- `amq` — `brew install avivsinai/tap/amq`. Written against **0.80.1**; flags have moved
-  between minor versions, so check `amq --version` if something in the reference does not
-  match.
+- `amq` — `brew install avivsinai/tap/amq`. Written against **0.80.1**; the hook says so
+  once if the installed version differs.
 - `git`, `python3`, `bash`.
 - Claude Code, for the hooks. The scripts themselves work without it.
 
@@ -55,11 +54,9 @@ worktree, with **nothing installed into any project**. It writes only its own en
 leaves other tools' hooks alone; `--check` reports what is registered and `--remove` takes
 it back out. In repositories without a `.amqrc` the hook exits silently in about 70 ms and
 spawns nothing.
-The installer warns when it finds such a project.
 
-Then give each repository a mailbox. This creates `.amqrc` and `.agent-mail/` and
-registers nothing: no script in this repository can register hooks inside a project, so
-there is exactly one layer and nothing can stack.
+Then give each repository a mailbox. This creates `.amqrc` and `.agent-mail/`, both
+excluded from git, and registers nothing.
 
 ```bash
 ~/.claude/skills/agent-mail/scripts/amq-setup-project.sh \
@@ -83,12 +80,8 @@ Re-running is safe: it repairs what is missing and overwrites nothing.
 That is all. Nothing is committed and no scripts are copied into the project: the hooks
 are registered once for your user and run the scripts from wherever you cloned this skill.
 
-The mailbox belongs to the **repository**, not to a working copy: it is located through
-`git rev-parse --git-common-dir`, so every worktree shares one mailbox without its own
-config. Inside a repository the hook looks only at that repository's own `.amqrc` and
-never above it — otherwise one stray `.amqrc` in `$HOME` would adopt every repository
-beneath it. A submodule therefore needs its own config; it does not inherit the
-superproject's.
+The mailbox belongs to the **repository**, not to a working copy, so every worktree
+shares one mailbox without its own config. A submodule is separate: it needs its own.
 
 ## How delivery works
 
@@ -100,24 +93,12 @@ A session learns about a message only while it is alive and something is happeni
 If nobody has the project open, the message waits. This is mail, not a phone call:
 delivery is guaranteed, immediacy is not.
 
-## The one thing worth reading before you start
+## The rules the agents follow
 
-`amq read --id` does not show a message — it **takes** it. The message moves out of the
-unread box, and in the shared `collab` mailbox that means it disappears for every window
-in the project, with no trace. There is no command that puts it back.
-
-To look at a message without consuming it, use `amq list --new --json`,
-`amq thread --id <thread> --include-body`, `amq monitor --peek`, or
-`scripts/amq-log.sh --all --body`. If you took one by mistake,
-`scripts/amq-return.sh <id> --to <topic>` forwards a copy to the topic that owns it —
-that is the only repair there is.
-
-A window that has claimed its own topic is never shown the subjects or ids of mail in
-other topics, only a count. Otherwise a session busy with something else gets pulled into
-sorting the shared basket, and reading a message to find out whose it is destroys it.
-
-[SKILL.md](SKILL.md) covers this and the rest of the rules. [references/commands.md](references/commands.md)
-is the command reference, split by what consumes and what does not.
+[SKILL.md](SKILL.md) is what the model reads: which mail is yours, what to ignore, and
+which commands consume a message rather than show it.
+[references/commands.md](references/commands.md) is the command reference, split by what
+consumes and what does not.
 
 ## Other agent CLIs
 
