@@ -214,7 +214,7 @@ SORTER=""
 if [ -f "$RP/.sorter" ]; then
   [ "$(cat "$RP/.sorter" 2>/dev/null)" = "$MKEY" ] && SORTER=1 || SORTER=0
 fi
-BRIEF=$(AMQ_JSON="$ALL" AMQ_MAX="${AMQ_MAX:-12}" AMQ_MINE="$MY_SESSION" AMQ_CLAIMED="$CLAIMED" AMQ_SORTER="$SORTER" python3 <<'PY'
+BRIEF=$(AMQ_JSON="$ALL" AMQ_MAX="${AMQ_MAX:-12}" AMQ_MINE="$MY_SESSION" AMQ_CLAIMED="$CLAIMED" AMQ_SORTER="$SORTER" AMQ_SDIR="$SDIR" python3 <<'PY'
 import os, json
 
 CTRL = {c: None for c in range(32)}
@@ -295,15 +295,35 @@ for m in rows:
         note, ident(m.get("id", "?")), clean(m.get("subject") or "(no subject)")))
 if extra:
     parts.append("- ...and {} more: amq list --new --me <handle> --session <session>".format(extra))
-if not TRIAGE and loose:
+if not TRIAGE and shared:
     # Count only. No subject, no id, no command: a subject is enough to derail a
     # busy window, and an id is enough for it to consume mail it should not touch.
-    where = sorted({str(m.get("_session")) for m in shared + orphan})
+    where = sorted({str(m.get("_session")) for m in shared})
     parts.append(
-        "- unowned elsewhere: {} (in: {}) — not addressed to your topic and NOT your\n"
-        "  job. Do not read, claim or drain them, and do not mention them: reading\n"
-        "  takes a message away from whoever it belongs to, and nothing puts it back."
-        .format(loose, ", ".join(where)))
+        "- unowned in {}: {} — not addressed to your topic and NOT your job. Do not\n"
+        "  read, claim or drain them, and do not mention them: reading takes a message\n"
+        "  away from whoever it belongs to, and nothing puts it back."
+        .format(", ".join(where), len(shared)))
+if not TRIAGE and orphan:
+    # An ORPHAN is NOT another window's mail — no window is on that topic, which is the
+    # definition. Collapsing it into the shared-basket sentence told a reader that taking
+    # it would rob someone, when there is nobody to rob: a reply that arrived after its
+    # work had closed sat unread for twenty hours because the hook said it was not theirs.
+    # A topic outlives the session that opened it, so this is the normal fate of a late
+    # reply, not an edge case. Named separately, with its ids, because somebody has to
+    # take it and only a reader can tell whether it is their old work.
+    for m in orphan[:3]:
+        parts.append("- ORPHAN | session {} | from {} (project {}) | {}\n  id: {}\n  subject: {}"
+                     .format(ident(m.get("_session", "?")), ident(m.get("from", "?")),
+                             ident(origin(m)), ident(m.get("kind", "-")),
+                             ident(m.get("id", "?")), clean(m.get("subject") or "(no subject)")))
+    parts.append(
+        "  ^ nobody is on {} topic{} — no window will ever be told about {}.\n"
+        "  If that was your work, it is yours: {}/amq-peek.sh <id> first, it consumes nothing."
+        .format("that" if len(orphan) == 1 else "those",
+                "" if len(orphan) == 1 else "s",
+                "it" if len(orphan) == 1 else "them",
+                os.environ.get("AMQ_SDIR", "<skill>/scripts")))
 if others:
     sess = sorted({str(m.get("_session")) for m in others})
     parts.append("- in other windows: {} (sessions: {}) — not yours, don't touch".format(

@@ -61,6 +61,7 @@ if [ "${1:-}" = "--show" ]; then
   say "window:   $WIN"
   if [ -n "$cur" ]; then
     say "topic:    $cur"
+    say "about:    $(cat "$RP/$cur/.description" 2>/dev/null || echo '(none — set it with --about)')"
     say "mailbox:  $RP/$cur"
     say "neighbours address it as: --project $PROJECT --session $cur"
     echo "eval \"\$(amq env --session $cur --me $ME)\""
@@ -72,10 +73,39 @@ if [ "${1:-}" = "--show" ]; then
   exit 0
 fi
 
-[ -n "${1:-}" ] || { say "specify a topic: amq-use.sh \"<any wording>\""; exit 2; }
-SESSION=$(python3 "$HERE/slug.py" "$1")
+TOPIC=""; ABOUT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --about) ABOUT="$2"; shift 2 ;;
+    -*) say "unknown argument: $1"; exit 2 ;;
+    *) [ -n "$TOPIC" ] || TOPIC="$1"; shift ;;
+  esac
+done
+[ -n "$TOPIC" ] || { say "specify a topic: amq-use.sh \"<any wording>\" --about \"<one line>\""; exit 2; }
+SESSION=$(python3 "$HERE/slug.py" "$TOPIC")
+DESC="$RP/$SESSION/.description"
+
+# A topic name is a slug. Whoever claims it knows what it is for; nobody else can tell
+# from `td-021-refused-read-notice` whether their question belongs there. So the
+# description is required when the topic is NEW — that is the only moment the knowledge
+# exists — and inherited silently when an existing topic is re-claimed.
+if [ ! -d "$RP/$SESSION" ] && [ -z "$ABOUT" ]; then
+  say "new topic '$SESSION' needs a description — senders see it when they look you up:"
+  say "  amq-use.sh \"$TOPIC\" --about \"<what this window is working on, one line>\""
+  exit 2
+fi
+
 [ -d "$RP/$SESSION" ] || ( cd "$DIR" && amq session create "$SESSION" --me "$ME" >/dev/null 2>&1 )
 [ -d "$RP/$SESSION" ] || { say "could not create session '$SESSION'"; exit 1; }
+
+if [ -n "$ABOUT" ]; then
+  printf '%s\n' "$ABOUT" > "$DESC" 2>/dev/null \
+    && say "· description saved — senders will see it" \
+    || say "warning: could not write $DESC"
+elif [ ! -f "$DESC" ]; then
+  say "⚠ this topic has no description; senders cannot tell what it is for."
+  say "  add one: amq-use.sh \"$TOPIC\" --about \"<one line>\""
+fi
 
 printf '%s' "$SESSION" > "$STATE" 2>/dev/null || say "warning: could not write $STATE, the hook will not learn about the topic"
 say "window claimed the topic: $SESSION"

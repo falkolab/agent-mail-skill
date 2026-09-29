@@ -45,6 +45,15 @@ amq send --to <who> --project <project> --session collab --body "..."   # anothe
 amq send --to "<who>@<project>:<session>" --body "..."        # the same, inline
 ```
 
+**`--strict` on every send.** Without it a handle that is not in the recipient's registry
+is accepted: amq creates `agents/<that-name>/inbox/` inside the SENDER's own mailbox,
+writes the message there, prints `Sent`, and nothing crosses over. The envelope has no
+`from_project`, so it cannot be replied to either. With `--strict` it refuses:
+`handle "hub" not in config.json agents [hub-claude user]`.
+
+`amq-address.sh <neighbour>` prints the whole address — handle, project and topics, with
+`--strict` already in the line, and warns when the peering is one-sided.
+
 Useful: `--subject`, `--kind`, `--priority`, `--labels a,b`, `--thread <id>`,
 `--context '<json>'`, `--body @file`, `--body -` (stdin),
 `--wait-for drained --wait-timeout 60s`, `--json`, `--strict`.
@@ -190,6 +199,19 @@ The frontmatter carries more than `amq list --json` returns: `to[]`, `from_proje
 `amq who --json` is **unreliable** for discovering a neighbour's topics: in repositories
 with a `.claude/agents/` directory it returns `null` with exit code 0. Use
 `amq session list --root <peer>/.agent-mail --json` instead.
+
+## Addressing a neighbour
+
+```bash
+amq-address.sh [<peer>]
+```
+Prints the ready send line for every peer: handle from their registry, project, each topic
+with its description and whether a window is on it, and `--strict` already in place. Warns
+when they call themselves something else than the key you filed them under, or do not list
+you as a peer — both make replies fail. Exit `3` if there is no such peer.
+
+Topic descriptions come from `<root>/<topic>/.description`, written by `amq-use.sh --about`
+when the topic is created. `amq`'s own `hint` field is always empty; nothing populates it.
 
 ## Which mailbox is this window on
 

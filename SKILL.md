@@ -162,6 +162,11 @@ Identical handles on both sides make senders indistinguishable: a message "from 
 will not say which one.
 
 **5. `--project` is for another project only.** Inside your own — `--session` or nothing.
+**The project name is not the handle.** `--to <project>` is accepted, creates a phantom
+inbox inside YOUR OWN mailbox, prints `Sent`, and delivers nothing — no `from_project`, so
+the message cannot even be answered. **Always send with `--strict`**, which refuses it:
+`handle "hub" not in config.json agents [hub-claude user]`. Get both from
+`amq-address.sh <neighbour>` rather than from memory.
 
 **6. Never eyeball another window's session name.** Run
 `amq session list --root <peer>/.agent-mail --json` first. A missed name is a
@@ -183,20 +188,15 @@ python3 -c 'import json;print(json.load(open(".amqrc")).get("peers",{}))'
 # 1. pin your own topic
 cd <repo> && eval "$(amq env --session <topic> --me <own-handle>)"
 
-# 2. find out which topic they are on — DO NOT guess, and do not use `amq who --json`
-amq session list --root <path-to-neighbour>/.agent-mail --json
+# 2. get the address — handle, project and topic, ready to paste. Do not guess any of
+#    them, and do not use `amq who --json`: it returns null with exit code 0 in a
+#    repository that has a .claude/agents directory.
+amq-address.sh <neighbour-name>
 
-# 3. write to that topic. A window that has claimed one sees only a COUNT for collab,
-#    with no subject and no id, so a message dropped there may never be looked at.
-amq send --to <neighbour-handle> --project <neighbour-name> --session <their-topic> \
+# 3. send what it printed. --strict is part of the address, not an option:
+amq send --me <own-handle> --to <their-handle> --project <their-name> \
+  --session <their-topic> --strict \
   --kind question --labels <their-topic> \
-  --subject "<the question in one line>" --body "<context and what exactly you need>"
-
-# ...only if you genuinely cannot tell which topic: their collab, which always exists.
-#    Label it with the topic you think it belongs to — that is the one field a sorter
-#    can route on without reading anything.
-amq send --to <neighbour-handle> --project <neighbour-name> --session collab \
-  --kind question --labels <topic-you-think-it-is> \
   --subject "<the question in one line>" --body "<context and what exactly you need>"
 
 # 4. the answer arrives by itself in <topic>, same thread. Collect your topic only:
@@ -229,10 +229,14 @@ calls a topic a session, and the harness calls a window a session, and they are 
 same thing. "Your mailbox" means the topic directory this window reads — the `mailbox:`
 line. The same path is printed in the hook's header on every turn.
 
-**First thing in a new window, claim a topic:**
+**First thing in a new window, claim a topic — with one line saying what it is for:**
 ```bash
-amq-use.sh "<any phrasing of the topic>"
+amq-use.sh "<any phrasing of the topic>" --about "<what this window is working on>"
 ```
+The description is required for a NEW topic and inherited when you re-claim an existing
+one. A slug like `td-021-refused-read-notice` tells a sender nothing about whether their
+question belongs there, and the window that claimed it is the only one who knows. It shows
+up in `amq-address.sh`, which is how neighbours find you.
 The topic is bound to the **session** (by `CLAUDE_CODE_SESSION_ID`), not to the terminal
 and not to the directory, so it survives switching working copies.
 
