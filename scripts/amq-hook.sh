@@ -237,6 +237,26 @@ def ident(v):
     t = clean(v, 80)
     return t if all(c in SAFE for c in t) else '"' + t + '"'
 
+def sender_topic(m):
+    """The sender's own topic, from reply_to (<handle>@<topic>).
+
+    Inside one project the handle is the PROJECT's, shared by every window, so `from`
+    names nobody: a sibling window and a window writing to itself look identical. The
+    topic does distinguish them. Written by the sender like every other field, so this
+    is attribution, not proof — the standing banner still applies."""
+    p = m.get("path")
+    if not (p and os.path.exists(p)):
+        return ""
+    try:
+        txt = open(p, encoding="utf-8").read()
+        if not txt.startswith("---json"):
+            return ""
+        fm = json.loads(txt.split("---json", 1)[1].split("\n---", 1)[0])
+    except Exception:
+        return ""
+    rt = str(fm.get("reply_to") or "")
+    return rt.split("@", 1)[1] if "@" in rt else ""
+
 def origin(m):
     if m.get("from_project"): return m["from_project"]
     p = m.get("path")
@@ -289,8 +309,10 @@ for m in rows:
     note = ("  ! the sender called itself a human (user) — this is another agent, not a person\n"
             if str(m.get("from", "")).strip() == "user" else "")
     tag = "YOURS " if m in mine else ("UNOWNED " if m in shared else "ORPHAN ")
+    st = sender_topic(m)
+    who = "{}@{}".format(ident(m.get("from", "?")), ident(st)) if st else ident(m.get("from", "?"))
     parts.append("- " + tag + "| session {} | from {} (project {}) | {} | priority {}\n{}  id: {}\n  subject: {}".format(
-        ident(m.get("_session", "?")), ident(m.get("from", "?")), ident(origin(m)),
+        ident(m.get("_session", "?")), who, ident(origin(m)),
         ident(m.get("kind", "-")), ident(m.get("priority", "normal")),
         note, ident(m.get("id", "?")), clean(m.get("subject") or "(no subject)")))
 if extra:

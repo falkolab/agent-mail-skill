@@ -49,7 +49,7 @@ amq send --to "<who>@<project>:<session>" --body "..."        # the same, inline
 is accepted: amq creates `agents/<that-name>/inbox/` inside the SENDER's own mailbox,
 writes the message there, prints `Sent`, and nothing crosses over. The envelope has no
 `from_project`, so it cannot be replied to either. With `--strict` it refuses:
-`handle "hub" not in config.json agents [hub-claude user]`.
+`handle "crm" not in config.json agents [crm-claude user]`.
 
 `amq-address.sh <neighbour>` prints the whole address — handle, project and topics, with
 `--strict` already in the line, and warns when the peering is one-sided.
