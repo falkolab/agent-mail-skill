@@ -7,4 +7,3 @@ __pycache__/
 # runtime state, never part of the skill itself
 .amqrc
 .agent-mail/
-.ruff_cache/

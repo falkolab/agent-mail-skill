@@ -1,0 +1,43 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    # These scripts are run by a hook on every prompt, in every repository on the
+    # machine. A syntax error does not fail loudly there — the hook is invoked with
+    # its output discarded, so mail simply stops arriving and nothing says why.
+    # That is the failure this job exists to catch before anyone pulls it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash -n on every script
+        run: |
+          set -e
+          for f in scripts/*.sh; do
+            echo "checking $f"
+            bash -n "$f"
+          done
+
+      - name: ruff
+        run: |
+          pipx install ruff
+          ruff check scripts/slug.py
+
+      - name: scripts are executable
+        # The hook resolves its siblings by path and runs them directly; a script that
+        # lost its +x mode is found and then silently does nothing.
+        run: |
+          set -e
+          miss=0
+          for f in scripts/*.sh; do
+            [ -x "$f" ] || { echo "not executable: $f"; miss=1; }
+          done
+          exit $miss
