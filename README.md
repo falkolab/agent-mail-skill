@@ -43,10 +43,13 @@ git clone https://github.com/falkolab/agent-mail-skill ~/.claude/skills/agent-ma
 `~/.claude/skills/` makes it available in every project. For one project only, clone into
 `<repo>/.claude/skills/agent-mail` instead.
 
+The commands below are written as bare script names. They live in `scripts/` wherever you
+just cloned this — prefix them with that path, or put it on your `PATH`.
+
 Register the delivery hooks once, for your user:
 
 ```bash
-~/.claude/skills/agent-mail/scripts/amq-install-user-hooks.sh
+amq-install-user-hooks.sh
 ```
 
 That covers every repository on the machine, including ones created later and every
@@ -62,9 +65,6 @@ should be able to reach:
 amq-setup-project.sh --project <name> --dir <repo> --handle <handle> \
                      [--peer <their-name>=<their-repo>]...
 ```
-
-(Examples below drop the `~/.claude/skills/agent-mail/scripts/` prefix for readability;
-the scripts are not on your `PATH` unless you put them there.)
 
 `--project` is this repository's name in the mail. `--handle` is who sends and receives
 here; one per repository, so prefix it with the project to keep senders apart. `--peer`
@@ -87,9 +87,22 @@ amq-setup-project.sh --project crm --dir ~/code/crm \
 The first run says the neighbour is not configured yet — expected, it is not there so far.
 After the second the route converges and the script verifies it in both directions.
 
-Re-running is safe: it repairs what is missing and overwrites nothing. That is also how you
-add a peer later, or fix the config after moving a repository, since peer paths are
-absolute.
+**With more repositories it is still one run each, not one per pair** — `--peer` repeats.
+Peer only the ones that actually correspond; a repository nobody writes to needs no peers
+at all. Adding a fourth later means one run in it, plus a one-line run in each repository
+it should talk to:
+
+```bash
+amq-setup-project.sh --project crm --dir ~/code/crm --handle crm-claude \
+                     --peer shipping=~/code/shipping
+```
+
+Re-running is safe and additive: existing peers survive, the missing one is added, nothing
+is overwritten. Use it the same way to repair the config after moving a repository, since
+peer paths are absolute.
+
+Mutual peering is not a formality: a reply fails outright without it
+(`no peers configured in .amqrc`), so both sides must list each other.
 
 ## What it sets up
 
@@ -138,9 +151,19 @@ JSON payload on stdin, the reminder text on stdout.
   clone made elsewhere — claude.ai/code included — has none, and the hook there has
   nothing to read.
 
-## Licence
+## You might also like
+
+[chekhov-skill](https://github.com/falkolab/chekhov-skill) — a Claude Code skill that makes
+replies terse the way Chekhov edited prose: no preamble, no summing up, only the details
+that fire.
+
+## License
 
 MIT. See [LICENSE](LICENSE).
 
 `amq` itself is a separate MIT-licensed project. This repository does not redistribute
 it — the installer pulls it from the upstream Homebrew tap.
+
+## Author
+
+Andrei Tkachenko, Telegram channel "Automate It" (Rus): [@aitomateit](https://t.me/aitomateit)
