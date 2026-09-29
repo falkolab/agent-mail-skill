@@ -313,7 +313,16 @@ echo "verification:"
     [ -n "$name" ] || continue
     roster="$ppath/meta/config.json"
     if [ ! -f "$roster" ]; then
-      say "· $name is not set up yet — run the script there too"; continue
+      # A missing registry means one of two very different things, and reporting the
+      # wrong one sends you to fix the wrong machine. A typo in --peer silently replaces
+      # a working peer (last value wins), and the old message then blamed the neighbour.
+      if [ ! -d "$ppath" ]; then
+        say "✗ $name: no mailbox at $ppath"
+        say "  check the --peer path you just passed; a wrong one REPLACES the previous"
+      else
+        say "· $name is not set up yet — run the script there too"
+      fi
+      continue
     fi
     peer_handle=$(python3 -c "import json,sys;a=json.load(open(sys.argv[1]))['agents'];print(next((h for h in a if h!='user'),''))" "$roster")
     [ -n "$peer_handle" ] || { say "· $name has no agent besides user in its registry"; continue; }
