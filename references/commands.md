@@ -109,10 +109,18 @@ it as session `(root)`. Always name the session when sending.
 ## Replying
 
 ```bash
-amq reply --id <msg_id> --kind answer --body "..."
+amq-send.sh reply --id <msg_id> --kind answer --body "..."
 ```
-The thread, `refs` and the return route are filled in automatically. `--project` is not
-needed. `reply` has **no** `--session` flag — it needs a pinned context or `--root`.
+The thread, `refs` and the return route are filled in automatically; `--project` is not
+needed. Use the wrapper rather than `amq reply` directly: `reply` has no `--session` flag,
+so from an unpinned shell it needs `--root`, and that writes an empty `reply_to` — the
+answer arrives with no return address.
+
+**Pinning, measured on 0.80.1 from an unpinned shell:** `list --session` and
+`drain --session` work; `send --session` is refused (`--session requires a session
+context`); `send --root` and `reply --root` succeed with `reply_to: None`. A shell pinned
+to the base root instead of a topic yields `reply_to: <handle>@collab` — the wrong window.
+`amq-use.sh` claims a topic for the hook only; it does not pin amq.
 
 ## Sessions and presence
 
