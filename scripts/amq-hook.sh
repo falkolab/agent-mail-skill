@@ -217,8 +217,8 @@ SORTER=""
 if [ -f "$RP/.sorter" ]; then
   [ "$(cat "$RP/.sorter" 2>/dev/null)" = "$MKEY" ] && SORTER=1 || SORTER=0
 fi
-BRIEF=$(AMQ_JSON="$ALL" AMQ_MAX="${AMQ_MAX:-12}" AMQ_MINE="$MY_SESSION" AMQ_CLAIMED="$CLAIMED" AMQ_SORTER="$SORTER" AMQ_SDIR="$SDIR" python3 <<'PY'
-import os, json
+BRIEF=$(AMQ_JSON="$ALL" AMQ_MAX="${AMQ_MAX:-12}" AMQ_MINE="$MY_SESSION" AMQ_CLAIMED="$CLAIMED" AMQ_SORTER="$SORTER" AMQ_SDIR="$SDIR" AMQ_RP="$RP" AMQ_STALE="${AMQ_STALE_DAYS:-14}" python3 <<'PY'
+import os, json, glob, time
 
 CTRL = {c: None for c in range(32)}
 for _c in (0x09, 0x0a, 0x0b, 0x0c, 0x0d):
@@ -284,6 +284,33 @@ MINE = os.environ.get("AMQ_MINE") or ""      # "" = this window claimed no topic
 CLAIMED = {t for t in (os.environ.get("AMQ_CLAIMED") or "").split(",") if t}
 SORTER = os.environ.get("AMQ_SORTER") or ""   # explicitly designated, may be empty
 
+# How long each claim has gone unrenewed. A claim file is written by amq-use.sh and read
+# by nothing else, so its mtime is the age of the claim — NOT a sign that the window is
+# alive. That is the whole difficulty: a window idle for a month and a window that died a
+# month ago are identical on disk, which is why nothing expires on a timer. A claim held
+# by a dead window still makes its topic look owned, so the mail inside it is filed under
+# "in other windows" and never surfaces as ORPHAN. The age is printed so a reader can
+# suspect that case; the decision stays with a human.
+CLAIM_AGE = {}
+try:
+    for _p in glob.glob(os.path.join(os.environ.get("AMQ_RP", ""), ".window-*")):
+        try:
+            _t = open(_p).read().strip()
+        except Exception:
+            continue
+        if not _t or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for c in _t):
+            continue
+        _d = int((time.time() - os.path.getmtime(_p)) // 86400)
+        # Two windows on one topic: the fresher claim is the one that matters.
+        if _t not in CLAIM_AGE or _d < CLAIM_AGE[_t][0]:
+            CLAIM_AGE[_t] = (_d, _p)
+except Exception:
+    pass
+try:
+    STALE = int(os.environ.get("AMQ_STALE") or 14)
+except ValueError:
+    STALE = 14
+
 mine   = [m for m in rows if MINE and m.get("_session") == MINE]
 shared = [m for m in rows if m.get("_session") == "collab"]
 # A topic no window claims is nobody's: its mail would otherwise be filed under
@@ -291,6 +318,12 @@ shared = [m for m in rows if m.get("_session") == "collab"]
 orphan = [m for m in rows if m not in mine and m not in shared
           and m.get("_session") not in CLAIMED and m.get("_session") != "collab"]
 others = [m for m in rows if m not in mine and m not in shared and m not in orphan]
+# Topics holding mail behind a claim nobody has renewed. Kept separate because of the
+# silent case below: when there is nothing else to report the hook prints nothing at all,
+# and mail parked behind a dead window's claim would then never be mentioned to anybody —
+# the one failure this whole notice exists to catch.
+STALE_HELD = sorted({str(m.get("_session")) for m in others
+                     if CLAIM_AGE.get(str(m.get("_session")), (0,))[0] >= STALE})
 
 # Who gets the details needed to triage unowned mail: the designated sorter if there is
 # one, otherwise any window that has not claimed a topic. Everyone else gets a count —
@@ -353,9 +386,33 @@ if others:
     sess = sorted({str(m.get("_session")) for m in others})
     parts.append("- in other windows: {} (sessions: {}) — not yours, don't touch".format(
         len(others), ", ".join(sess)))
+    # Only for the topics actually holding that mail, and only two of them: this prints
+    # on every turn, and a notice nobody can act on is noise.
+    for _s in STALE_HELD[:2]:
+        _d, _f = CLAIM_AGE[_s]
+        parts.append(
+            "  ^ the claim on {} has not been renewed for {} days. If that window is gone,"
+            " this mail reaches nobody.\n"
+            "    A quiet window that is still working looks exactly the same, so ask before"
+            # ident() quotes anything holding a slash and cuts at 80, which turns the
+            # path into an `rm` nobody can run. The path is ours — built from the mailbox
+            # root and the window key — so clean() alone is the right guard here; the
+            # topic name beside it comes from a peer-writable file and keeps ident().
+            " dropping it: rm {}".format(ident(_s), _d, clean(_f, 300)))
 print(total)
 print("|".join(sorted(ids)))
 print("{} {}".format(loose, 1 if TRIAGE else 0))          # unowned mail exists even when none of it is ours to hold on
+# Line 4: said only when the hook would otherwise be silent. No ids and no instruction to
+# take anything — the reader cannot tell a dead window from a quiet one, and must not try.
+if STALE_HELD:
+    _s = STALE_HELD[0]
+    _d, _f = CLAIM_AGE[_s]
+    _n = len([m for m in others if str(m.get("_session")) in STALE_HELD])
+    print("[agent-mail] {} message(s) sit in topic {}, held by a claim {} days unrenewed."
+          " Not yours to take. If that window is gone nobody will ever be told: {}"
+          .format(_n, ident(_s), _d, clean(_f, 300)))
+else:
+    print("")
 print("\n".join(parts))
 PY
 ) || warn "could not parse the inbox — check amq doctor"
@@ -364,7 +421,8 @@ COUNT=$(printf '%s' "$BRIEF" | sed -n 1p)
 IDS=$(printf '%s' "$BRIEF" | sed -n 2p)
 LOOSE=$(printf '%s' "$BRIEF" | sed -n 3p | cut -d' ' -f1)
 TRIAGE_ROLE=$(printf '%s' "$BRIEF" | sed -n 3p | cut -d' ' -f2)
-BODY=$(printf '%s' "$BRIEF" | tail -n +4)
+STALE_NOTE=$(printf '%s' "$BRIEF" | sed -n 4p)
+BODY=$(printf '%s' "$BRIEF" | tail -n +5)
 
 [ -n "$NOTE" ] && [ "$MODE" != "stop" ] && echo "$NOTE"
 
@@ -390,6 +448,9 @@ directory restores counting for the rest of the mailbox."
     TAIL=""
     HOLD_ONLY=1
   else
+  # Nothing of ours and nothing unowned — but mail may still be parked behind a claim
+  # nobody has renewed, and that is exactly the case that otherwise passes in silence.
+  [ -n "$STALE_NOTE" ] && [ "$MODE" != "stop" ] && echo "$STALE_NOTE"
   rm -f "$RP"/.hook-blocked-* 2>/dev/null
   exit 0
   fi

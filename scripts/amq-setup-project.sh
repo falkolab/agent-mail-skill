@@ -11,6 +11,11 @@
 #
 # Safe to re-run: it repairs what is missing and overwrites nothing.
 set -euo pipefail
+# A pin inherited from the calling shell outranks .amqrc, and the amq calls below take
+# no --root of their own: run from a shell pinned to ANOTHER project, they would act on
+# that project's mailbox and report success. This script finds the mailbox itself, from
+# the .amqrc of the repository it was given; the inherited pin must not survive into it.
+unset AM_ROOT AM_BASE_ROOT AM_ROOT_ID AM_BASE_ROOT_ID AM_SESSION AM_ME
 
 PROJECT=""; DIR=""; HANDLE=""; PEERS=(); SESSIONS=(); WORKTREES=1; REMOVE=0; ADDPATH=0; PRUNE=0
 while [ $# -gt 0 ]; do

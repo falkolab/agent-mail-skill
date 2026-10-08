@@ -122,6 +122,12 @@ context`); `send --root` and `reply --root` succeed with `reply_to: None`. A she
 to the base root instead of a topic yields `reply_to: <handle>@collab` — the wrong window.
 `amq-use.sh` claims a topic for the hook only; it does not pin amq.
 
+A claim never expires: on disk an idle window and a dead one look the same, so expiry
+would take a working window's mailbox away from it. Give a topic up with
+`amq-use.sh --release`. A claim left behind keeps its topic looking owned, and mail in it
+is reported as another window's rather than as ORPHAN; when that happens the hook prints
+the claim's age and the file to delete, after 14 days (`AMQ_STALE_DAYS`).
+
 ## Sessions and presence
 
 ```bash
@@ -224,9 +230,10 @@ when the topic is created. `amq`'s own `hint` field is always empty; nothing pop
 ## Which mailbox is this window on
 
 ```bash
-amq-use.sh --show
+amq-use.sh --show                  # + how long ago the topic was claimed
+amq-use.sh --release [--force]     # give the topic up; refuses on unread mail without --force
 ```
-Prints project, handle, window, topic and the absolute mailbox path. The same path is in
+Prints project, handle, window, topic, the age of the claim and the absolute mailbox path. The same path is in
 the hook header every turn. Use this when asked "which mailbox / which session are you
 on" — "session" means a topic to AMQ and a window to the harness, so quote the labelled
 output instead of paraphrasing.
