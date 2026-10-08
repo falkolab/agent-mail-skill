@@ -263,6 +263,19 @@ A non-ASCII name is transliterated (`обзор архитектуры` → `obz
 session is created, the window is bound to it, and the hook starts showing only that one.
 To see what is claimed: `amq-use.sh --show`.
 
+**Done with the topic?** `amq-use.sh --release` gives it up and puts the window back in
+the shared `collab`. The topic keeps its mail and its description. It refuses while there
+is unread mail in the topic: with nobody on it, that mail becomes ORPHAN and waits for
+whoever sorts the basket. Drain it first, or `--release --force` to let it go.
+
+A claim never expires on its own, and that is deliberate — a window idle for a week and a
+window that died a week ago are identical on disk, so expiry would take a working
+window's mailbox away from it. The price is the stale claim: it keeps a topic looking
+owned, so mail sitting in it is filed as another window's instead of surfacing as ORPHAN.
+When that happens the hook names the claim, its age and the file to delete. Deciding is a
+human's job — a quiet live window looks exactly the same. Threshold: 14 days,
+`AMQ_STALE_DAYS`.
+
 **Writing to another window of your own project** — same as to a neighbour, minus
 `--project`:
 ```bash
