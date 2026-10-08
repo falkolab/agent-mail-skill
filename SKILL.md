@@ -166,6 +166,8 @@ Identical handles on both sides make senders indistinguishable: a message "from 
 will not say which one.
 
 **5. `--project` is for another project only.** Inside your own — `--session` or nothing.
+**`--session` means two different things**: with `--project` it names the RECIPIENT's
+topic, without it your own. Same flag, two referents.
 **The project name is not the handle.** `--to crm` instead of `--to crm-claude` is accepted, creates a phantom
 inbox inside YOUR OWN mailbox, prints `Sent`, and delivers nothing — no `from_project`, so
 the message cannot even be answered. **Always send with `--strict`**, which refuses it:
@@ -232,6 +234,16 @@ Quote that output rather than paraphrasing. The word "session" is overloaded her
 calls a topic a session, and the harness calls a window a session, and they are not the
 same thing. "Your mailbox" means the topic directory this window reads — the `mailbox:`
 line. The same path is printed in the hook's header on every turn.
+
+**Sending needs a pinned shell; reading does not.** `amq list` and `amq drain` take
+`--session <topic>` from any shell. `amq send --session` is refused without a pin, and
+`--root` sends with an empty `reply_to` — nobody can answer it. Send and reply through
+`amq-send.sh`, which pins itself from this window's claim:
+
+```bash
+amq-send.sh --to <handle> --project <peer> --session <their-topic> --subject "..." --body "..."
+amq-send.sh reply --id <id> --kind answer --body "..."
+```
 
 **First thing in a new window, claim a topic — with one line saying what it is for:**
 ```bash
@@ -339,9 +351,12 @@ A message left hanging in `collab` reaches nobody: "leave it for everyone" is no
 it is a pause. But it no longer holds anyone's turn either, so if nothing here can route
 it, leave it for the user and say nothing.
 
-**3. Forwarding to the addressee's topic is both the normal path and the repair.** There
-is nothing to put a message back into `collab` with: `amq` has no command that returns it
-to `new`. You can move the file by hand, but that returns the message to **everyone**,
+**3. Forwarding to the addressee's topic is both the normal path and the repair.**
+Putting a message back is unsupported: `amq` has no command for it. Moving
+`inbox/cur/<id>.md` back to `inbox/new/` and deleting the matching
+`receipts/<id>__<handle>__drained.json` does return it to circulation — but it is a
+hand-edit of someone else's mailbox state, easy to get half-right, and it returns the
+message to every window, not to the one it was for. You can move the file by hand, but that returns the message to **everyone**,
 including the window that already read it: the `collab` mailbox is shared by the whole
 project. So — a copy into the addressee's topic. One command does it:
 
