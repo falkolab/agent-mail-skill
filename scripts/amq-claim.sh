@@ -31,6 +31,11 @@ amq_repo_root() {
 }
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH"
+# A pin inherited from the calling shell outranks .amqrc, and the amq calls below take
+# no --root of their own: run from a shell pinned to ANOTHER project, they would act on
+# that project's mailbox and report success. This script finds the mailbox itself, from
+# the .amqrc of the repository it was given; the inherited pin must not survive into it.
+unset AM_ROOT AM_BASE_ROOT AM_ROOT_ID AM_BASE_ROOT_ID AM_SESSION AM_ME
 command -v amq >/dev/null 2>&1 || { echo "amq not found" >&2; exit 1; }
 
 MSG=""; SESSION=""
@@ -92,4 +97,5 @@ if [ "$STATE" = "BUSY" ]; then
 fi
 amq read --root "$RP/$SESSION" --me "$ME" --id "$MSG"
 echo
-echo "(claimed by window $WIN; reply with: amq reply --id $MSG --kind answer --body \"...\")" >&2
+echo "(claimed by window $WIN; reply with:" >&2
+echo "   $(cd "$(dirname "$0")" && pwd)/amq-send.sh reply --id $MSG --kind answer --body \"...\")" >&2

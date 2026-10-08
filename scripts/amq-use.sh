@@ -4,6 +4,7 @@
 #
 #   eval "$(~/.claude/skills/agent-mail/scripts/amq-use.sh "api redesign")"
 #   eval "$(~/.claude/skills/agent-mail/scripts/amq-use.sh --show)"   # what is claimed now
+#   ~/.claude/skills/agent-mail/scripts/amq-use.sh --release           # give the topic back
 #
 # Why: until a window claims its own topic it sits in the shared collab together
 # with other windows — and they share one mailbox. Own topic = own mailbox, no races.
@@ -32,8 +33,28 @@ amq_repo_root() {
 }
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH"
+# A pin inherited from the calling shell outranks .amqrc, and `amq session create` takes
+# no --root: run from a shell pinned to ANOTHER project, this script would create the
+# topic in that project's mailbox and report success. Measured, not theorised. This
+# script finds the mailbox itself, from the .amqrc of the repository it was run in, so
+# the inherited pin has no business surviving into it.
+unset AM_ROOT AM_BASE_ROOT AM_ROOT_ID AM_BASE_ROOT_ID AM_SESSION AM_ME
 HERE="$(cd "$(dirname "$0")" && pwd)"
 say() { echo "$@" >&2; }
+
+# When the topic was last claimed. The file is written by a claim and by nothing else —
+# the hook only reads it — so this is the age of the claim, NOT a sign of life: a window
+# idle for a month and a window that died a month ago look identical here. That is why
+# nothing expires on its own; see --release.
+claim_age() {
+  python3 - "$1" <<'PY' 2>/dev/null || printf 'unknown'
+import os, sys, time
+d = time.time() - os.path.getmtime(sys.argv[1])
+n, w = (d // 86400, "day") if d >= 86400 else \
+       ((d // 3600, "hour") if d >= 3600 else (d // 60, "minute"))
+print("%d %s%s" % (n, w, "" if n == 1 else "s"))
+PY
+}
 
 command -v amq >/dev/null 2>&1 || { say "amq not found"; exit 1; }
 DIR=$(amq_repo_root) || { say "project is not connected to agent-mail (no .amqrc)"; exit 3; }
@@ -61,6 +82,7 @@ if [ "${1:-}" = "--show" ]; then
   say "window:   $WIN"
   if [ -n "$cur" ]; then
     say "topic:    $cur"
+    say "claimed:  $(claim_age "$STATE") ago"
     say "about:    $(cat "$RP/$cur/.description" 2>/dev/null || echo '(none — set it with --about)')"
     say "mailbox:  $RP/$cur"
     say "neighbours address it as: --project $PROJECT --session $cur"
@@ -70,6 +92,40 @@ if [ "${1:-}" = "--show" ]; then
     say "mailbox:  $RP/collab   — shared with every other unclaimed window here"
     say "claim one: amq-use.sh \"<topic>\""
   fi
+  exit 0
+fi
+
+if [ "${1:-}" = "--release" ]; then
+  # Giving a topic up is explicit and nothing else does it. A claim cannot expire on a
+  # timer: on disk an idle window is indistinguishable from a dead one, and expiring the
+  # quiet one would hand its topic — and its unread mail — to whoever sorts the basket
+  # while it is still working. The cost of being explicit is a stale claim; the cost of a
+  # timer is lost mail.
+  cur=$(cat "$STATE" 2>/dev/null)
+  [ -n "$cur" ] || { say "this window has claimed no topic — nothing to release"; exit 0; }
+  FORCE=""; [ "${2:-}" = "--force" ] && FORCE=1
+  # Only stdout is parsed: amq puts its version banner on stderr.
+  N=$( ( cd "$DIR" && amq list --session "$cur" --me "$ME" --new --json 2>/dev/null ) | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print(len(d if isinstance(d, list) else d.get("messages", [])))
+except Exception:
+    print(0)' 2>/dev/null )
+  case "$N" in ''|*[!0-9]*) N=0 ;; esac
+  if [ "$N" -gt 0 ] && [ -z "$FORCE" ]; then
+    say "refusing: $N unread message(s) in '$cur'."
+    say "  With nobody on the topic they become ORPHAN — shown to every window, held by"
+    say "  none, and answered only if somebody volunteers. Take them first:"
+    say "    amq drain --session $cur --me $ME --include-body --limit 0"
+    say "  or let them go:  amq-use.sh --release --force"
+    exit 2
+  fi
+  rm -f "$STATE" 2>/dev/null || { say "could not remove $STATE"; exit 1; }
+  say "released '$cur' — this window is back in the shared collab"
+  [ "$N" -gt 0 ] && say "⚠ $N unread message(s) left behind in '$cur'; they are ORPHAN now"
+  say "the topic keeps its mail and its description; re-claim it with:"
+  say "  amq-use.sh \"$cur\""
   exit 0
 fi
 
