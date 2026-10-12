@@ -465,7 +465,7 @@ WARN_LINE=""
 # behaviour for everybody silently and retroactively, so a mismatch must be visible
 # without someone thinking to check. Warned once per version, and only on a turn that
 # already prints something, so the silent path stays free of the extra subprocess.
-AMQ_PINNED=0.80.1
+AMQ_PINNED=0.96.1
 HAVE=$(amq --version 2>/dev/null | head -1 | tr -d '[:space:]')
 VER_LINE=""
 if [ -n "$HAVE" ] && [ "$HAVE" != "$AMQ_PINNED" ]; then
