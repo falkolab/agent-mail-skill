@@ -127,6 +127,34 @@ A session learns about a message only while it is alive and something is happeni
 If nobody has the project open, the message waits. This is mail, not a phone call:
 delivery is guaranteed, immediacy is not.
 
+### Waking a window that is standing idle
+
+The hooks fire on things the window does, so a window where nothing is happening is told
+nothing. Three cases, and only the third needs anything from you:
+
+- **Somebody is working in it.** The next thing they type prints the inbox above the
+  answer, and the turn cannot end while mail is unread. Nothing to do.
+- **Nobody has the project open.** The message waits in the mailbox until someone does.
+  Nothing to do either — and nothing that can be done.
+- **The window is open and idle**, waiting on a question it has already asked. This is the
+  one that looks broken: the answer is lying in the mailbox and the window will not notice
+  until its owner types something. Give it a watcher:
+
+```bash
+amq-watch.sh            # blocks, then exits the moment mail lands
+```
+
+Start it as a background task. It consumes nothing — `--peek` leaves every message
+unread — and when it exits, the harness wakes the session to report the exit. The session
+then reads its mail the usual way. `--timeout <seconds>` sets how long one wait lasts
+before it is re-armed (default 900); `--session <name>` watches one topic instead.
+
+It watches three scopes at once, because **none of them contains the others**: mail sent
+with no session at all, the shared `collab`, and this window's own topic. A watcher on one
+scope returns "nothing new" for mail sitting in another — it looks like it is working
+while missing most of the post. That is the single easiest thing to get wrong here, and
+starting one watcher by hand is how you get it wrong.
+
 ## The rules the agents follow
 
 [SKILL.md](SKILL.md) is what the model reads: which mail is yours, what to ignore, and
