@@ -168,6 +168,24 @@ scope returns "nothing new" for mail sitting in another — it looks like it is 
 while missing most of the post. That is the single easiest thing to get wrong here, and
 starting one watcher by hand is how you get it wrong.
 
+## Tests
+
+```bash
+tests/run.sh            # everything
+tests/run.sh claim      # cases whose name contains "claim"
+```
+
+They run the scripts against disposable mailboxes under a fresh temp directory — two
+peered projects, built from scratch per case — and never touch a real one. Each case is
+either a claim this documentation makes or a defect that reached a live mailbox: a drain
+command amq refuses, a reply with no return address, a topic created in another project's
+mailbox, a claim that outlived its failed read, a watcher that exited on mail it found
+rather than mail that arrived. The last section checks amq itself, so a release that
+changes one of the facts the scripts are built on fails here rather than in somebody's
+correspondence.
+
+CI runs them against the version pinned in `scripts/amq-hook.sh`.
+
 ## The rules the agents follow
 
 [SKILL.md](SKILL.md) is what the model reads: which mail is yours, what to ignore, and

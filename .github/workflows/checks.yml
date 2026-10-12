@@ -21,7 +21,7 @@ jobs:
       - name: bash -n on every script
         run: |
           set -e
-          for f in scripts/*.sh; do
+          for f in scripts/*.sh tests/*.sh; do
             echo "checking $f"
             bash -n "$f"
           done
@@ -41,3 +41,33 @@ jobs:
             [ -x "$f" ] || { echo "not executable: $f"; miss=1; }
           done
           exit $miss
+
+  tests:
+    # bash -n proves the scripts parse. It does not run a line of them, and every defect
+    # that reached a live mailbox — a drain command amq refuses, a reply with no return
+    # address, a claim that outlived its failed read, a watcher that exited on mail it
+    # found rather than mail that arrived — passed it green. This job runs the scripts
+    # against disposable mailboxes instead.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install the pinned amq
+        # The version comes from the hook, so the suite cannot drift away from the
+        # version the documentation claims to be written against.
+        run: |
+          set -e
+          ver=$(sed -n 's/^AMQ_PINNED=//p' scripts/amq-hook.sh | head -1)
+          [ -n "$ver" ] || { echo "no AMQ_PINNED in scripts/amq-hook.sh"; exit 1; }
+          echo "pinned version: $ver"
+          curl -fsSL -o amq.tar.gz \
+            "https://github.com/avivsinai/agent-message-queue/releases/download/v${ver}/amq_${ver}_linux_amd64.tar.gz"
+          tar -xzf amq.tar.gz amq
+          sudo install -m 0755 amq /usr/local/bin/amq
+          rm -f amq amq.tar.gz
+          amq --version
+
+      - name: run the suite
+        run: |
+          git config --global init.defaultBranch main
+          bash tests/run.sh
