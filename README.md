@@ -144,10 +144,17 @@ nothing. Three cases, and only the third needs anything from you:
 amq-watch.sh            # blocks, then exits the moment mail lands
 ```
 
-Start it as a background task. It consumes nothing — `--peek` leaves every message
-unread — and when it exits, the harness wakes the session to report the exit. The session
-then reads its mail the usual way. `--timeout <seconds>` sets how long one wait lasts
-before it is re-armed (default 900); `--session <name>` watches one topic instead.
+Start it as a background task — in Claude Code, the Bash tool with
+`run_in_background: true`; any other way it holds the turn for the whole wait. It consumes
+nothing — `--peek` leaves every message unread — and when it exits, the harness wakes the
+session to report the exit. The session then reads its mail the usual way.
+`--timeout <seconds>` sets how long one wait lasts before it is re-armed internally
+(default 900); `--session <name>` watches one topic instead.
+
+**One watcher covers one letter.** It exits when mail lands, so the window is uncovered
+until another is started; arming one belongs with collecting the mail. Claiming a topic
+and the hook's own "take your mail" block both say so, because an agent reads those and
+not this file.
 
 It watches three scopes at once, because **none of them contains the others**: mail sent
 with no session at all, the shared `collab`, and this window's own topic. A watcher on one

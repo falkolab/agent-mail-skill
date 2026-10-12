@@ -263,6 +263,28 @@ A non-ASCII name is transliterated (`обзор архитектуры` → `obz
 session is created, the window is bound to it, and the hook starts showing only that one.
 To see what is claimed: `amq-use.sh --show`.
 
+**Second thing in a new window, arm the watcher — as a BACKGROUND task:**
+```bash
+amq-watch.sh
+```
+In Claude Code that means the Bash tool with `run_in_background: true`. Started any other
+way it holds the turn for the whole wait — the very failure the next rule warns about.
+
+This is not optional and not only for long waits. The hooks that report the inbox fire on
+what the window DOES: session start, a user prompt, the end of a turn. A window that is
+standing still does none of those, so an answer can lie in its mailbox for hours with
+nobody told — and the window that asked the question is exactly the window that then
+stands still waiting for it. The watcher is the only thing that reaches it: it blocks
+outside the turn, consumes nothing, and exits the moment mail lands; that exit is what
+wakes the session.
+
+**It exits on the first letter, so arm it again** once you have taken your mail. A watcher
+that has fired is gone, and the window is uncovered until you start another. Re-arming is
+part of collecting the mail, not a separate chore.
+
+It waits on all three scopes — mail sent with no session, `collab`, this window's topic —
+because none of them contains the others.
+
 **Done with the topic?** `amq-use.sh --release` gives it up and puts the window back in
 the shared `collab`. The topic keeps its mail and its description. It refuses while there
 is unread mail in the topic: with nobody on it, that mail becomes ORPHAN and waits for
@@ -409,19 +431,13 @@ is cheaper, and needs no pin:
 amq list --session <topic> --me <handle> --new    # costs nothing, does not hold the turn
 ```
 
-**If the window will be sitting idle, arm a watcher instead** — as a background task, not
-in the turn:
+**The watcher is what covers a wait**, and it should already be running — see "Windows and
+sessions". If it is not, start it now, as a background task (`run_in_background: true`),
+and check after every collection that one is armed again:
 
 ```bash
 amq-watch.sh
 ```
-
-It blocks outside the turn and exits the moment mail lands, which is what wakes the
-session; it consumes nothing. Without it an idle window learns about the answer only when
-its user next types something, and the hooks that report the inbox fire on nothing in the
-meantime. It watches all three scopes — no session, `collab`, this window's topic —
-because none of them contains the others: a watch on one reports "nothing new" for mail
-sitting in another.
 
 **Block inside the turn only when there is nothing else to do**: you asked a question, the
 work cannot continue without the answer, and the turn is not worth keeping.
