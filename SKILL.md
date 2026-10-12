@@ -285,6 +285,11 @@ part of collecting the mail, not a separate chore.
 It waits on all three scopes — mail sent with no session, `collab`, this window's topic —
 because none of them contains the others.
 
+**Only what arrives after it starts wakes it.** Anything already unread is counted, named
+and ignored, so a stale message nobody sorted cannot make the watcher exit on the spot
+and leave the window deaf. If that count says something is in YOUR topic, read it now —
+the watcher will not tell you about it again.
+
 **Done with the topic?** `amq-use.sh --release` gives it up and puts the window back in
 the shared `collab`. The topic keeps its mail and its description. It refuses while there
 is unread mail in the topic: with nobody on it, that mail becomes ORPHAN and waits for

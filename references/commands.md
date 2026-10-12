@@ -108,10 +108,17 @@ it would on an empty mailbox, so one watcher looks healthy while missing most of
 Measured on 0.80.1.
 
 ```bash
-amq-watch.sh [--session <name>] [--timeout <seconds>]
+amq-watch.sh [--session <name>] [--interval <seconds>] [--timeout <seconds>]
 ```
-Waits on all three scopes at once and exits as soon as anything arrives, printing what
-landed; consumes nothing. **Start it as a background task** — in Claude Code, the Bash
+Waits on all three scopes at once and exits as soon as something NEW arrives, printing
+what landed; consumes nothing, and runs no subprocess while waiting — it reads the inbox
+directories the way `amq-peek.sh` reads a message.
+
+**Mail that was already unread does not wake it.** It is counted at the start, reported,
+and then ignored. `amq monitor` makes no such distinction: it returns on any unread
+message, so one stale ORPHAN in the root or in collab makes a monitor-based watcher exit
+at once, every time — the window looks covered and hears nothing. `--interval` is how
+often it looks (default 3s); `--timeout` gives up after that long and exits `4`. **Start it as a background task** — in Claude Code, the Bash
 tool with `run_in_background: true`. Any other way it holds the turn for the whole wait.
 The point is the exit: that is what wakes a window standing idle.
 
