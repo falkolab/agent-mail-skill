@@ -239,6 +239,12 @@ mailbox, including the one that already read it.
 ```bash
 amq-peek.sh <id> [--lines N]      # metadata + body, consumes nothing (0 = whole body)
 ```
+`amq-claim.sh <id>` finds the message itself — the base root first, then every session —
+and reads it from where it actually is. It used to assume `collab`, so a message sent with
+no session could not be read at all, while the claim it had already written stayed behind
+and locked that message to a window that never received it. A failed read now withdraws
+the claim it made.
+
 Finds the file by globbing `<root>/*/agents/<handle>/inbox/{new,cur}/<id>.md` and reads it
 — it launches no subprocess at all, so it cannot consume and costs the same on a large
 mailbox as on a small one. It deliberately does not look in the sender's `outbox/sent`,
