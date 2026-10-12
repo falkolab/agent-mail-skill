@@ -1,31 +1,35 @@
 #!/usr/bin/env bash
-# Wait for mail and exit the moment it lands, so a window that is standing idle
-# finds out about it.
+# Wait for mail that arrives FROM NOW ON and exit the moment it lands, so a window
+# standing idle finds out about it.
 #
-#   amq-watch.sh                  # the base root AND this window's topic
-#   amq-watch.sh --session <name> # one named topic instead
-#   amq-watch.sh --timeout 300    # how long one wait lasts before it is re-armed
+#   amq-watch.sh                    # mail with no session, collab, and this window's topic
+#   amq-watch.sh --session <name>   # one named topic instead
+#   amq-watch.sh --interval 5       # how often the mailbox is looked at (default 3s)
+#   amq-watch.sh --timeout 3600     # give up after this long (default: wait forever)
 #
-# Why this exists: the delivery hooks fire on things the WINDOW does — session start,
-# a user prompt, the end of a turn. A window where nothing is happening runs no hooks,
-# so a message can sit in its mailbox for hours with nobody told. Started as a
-# background task, this script is the missing nudge: it blocks until something
-# arrives, then exits, and the harness wakes the session to report the exit.
+# Why this exists: the delivery hooks fire on things the WINDOW does — session start, a
+# user prompt, the end of a turn. A window where nothing is happening runs no hooks, so a
+# message can sit in its mailbox for hours with nobody told. Started as a background task,
+# this is the missing nudge: it blocks until something NEW arrives, then exits, and the
+# harness wakes the session to report the exit.
 #
-# CONSUMES NOTHING: `amq monitor --peek` leaves every message unread. The window still
-# picks its mail up itself, with `amq drain`, when it gets round to it.
+# "NEW" is the whole point, and the first version got it wrong. `amq monitor` returns on
+# any unread message, not only on one that arrived after it started — so a single old
+# ORPHAN left in the root or in collab made the watcher exit instantly, every time, for
+# good. The window looked covered and was not; restarting changed nothing. So this takes a
+# census of what is already unread and waits for something outside it.
 #
-# Three waits, not one, and that is the point. Every scope is watched separately and none
-# contains another: `amq monitor` with no --session sees ONLY mail sent without a session,
-# `--session collab` only the shared basket, `--session <topic>` only that topic. On a
-# scope that has mail the others are blind — 4, exactly as if the mailbox were empty.
-# Measured on 0.80.1. A single watcher therefore misses most of the mail while looking
-# like it is working, which is the worst way for a notifier to fail.
+# CONSUMES NOTHING, and runs no subprocess in the loop: it reads the inbox directories the
+# way amq-peek.sh reads a message, so the cost of waiting is one directory listing per
+# scope per interval, whatever the size of the mailbox.
+#
+# Three scopes, because none of them contains the others: mail sent with no session at
+# all, the shared collab, and this window's own topic.
 
 set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH"
-# A pin inherited from the calling shell outranks .amqrc and would point every wait below
-# at another project's mailbox. This script finds the mailbox itself.
+# A pin inherited from the calling shell outranks .amqrc and would point this at another
+# project's mailbox. The mailbox is found here, from the repository's own .amqrc.
 unset AM_ROOT AM_BASE_ROOT AM_ROOT_ID AM_BASE_ROOT_ID AM_SESSION AM_ME
 
 say() { echo "$@" >&2; }
@@ -49,18 +53,19 @@ amq_repo_root() {
   return 1
 }
 
-TIMEOUT=900; ONE=""
+INTERVAL=3; LIMIT=0; ONE=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --session) ONE="$2"; shift 2 ;;
-    --timeout) TIMEOUT="$2"; shift 2 ;;
-    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
+    --session)  ONE="$2"; shift 2 ;;
+    --interval) INTERVAL="$2"; shift 2 ;;
+    --timeout)  LIMIT="$2"; shift 2 ;;
+    -h|--help)  sed -n '2,8p' "$0"; exit 0 ;;
     *) say "unknown argument: $1"; exit 2 ;;
   esac
 done
-case "$TIMEOUT" in ''|*[!0-9]*) say "--timeout takes seconds"; exit 2 ;; esac
+case "$INTERVAL" in ''|*[!0-9]*|0) say "--interval takes whole seconds, at least 1"; exit 2 ;; esac
+case "$LIMIT" in ''|*[!0-9]*) say "--timeout takes whole seconds (0 = no limit)"; exit 2 ;; esac
 
-command -v amq >/dev/null 2>&1 || { say "amq not found"; exit 1; }
 DIR=$(amq_repo_root) || { say "not wired to agent-mail: no .amqrc here or above"; exit 3; }
 IFS=$'\t' read -r ROOT ME <<<"$(python3 -c "
 import json,sys
@@ -69,61 +74,83 @@ print('\t'.join([c.get('root','.agent-mail'), c.get('handle','')]))" "$DIR")"
 case "$ROOT" in /*) RP="$ROOT" ;; *) RP="$DIR/$ROOT" ;; esac
 [ -n "$ME" ] || { say "no handle in .amqrc — rerun amq-setup-project.sh"; exit 3; }
 
-# The topic this window claimed, keyed the same way amq-use.sh keys it.
+# The topic this window claimed, keyed the way amq-use.sh keys it.
 WIN="${AMQ_WINDOW:-${CLAUDE_CODE_SESSION_ID:-}}"
 MINE=$(cat "$RP/.window-$(printf '%s' "$WIN" | tr -c 'A-Za-z0-9_.-' '_')" 2>/dev/null)
 
-TARGETS=()
-if [ -n "$ONE" ]; then TARGETS=("$ONE")
+# Scope name -> the inbox directory holding its unread mail. A session's mail lives under
+# <root>/<session>/, and session-less mail directly under <root>/ — the layout amq-peek.sh
+# relies on too.
+NAMES=(); DIRS=()
+add_scope() {
+  NAMES+=("$1")
+  [ -n "$2" ] && DIRS+=("$RP/$2/agents/$ME/inbox/new") || DIRS+=("$RP/agents/$ME/inbox/new")
+}
+if [ -n "$ONE" ]; then add_scope "$ONE" "$ONE"
 else
-  TARGETS=("" "collab")      # "" = mail sent with no session at all; collab = the basket
-  # The claimed topic is where anything addressed to this window personally lands.
-  [ -n "$MINE" ] && [ "$MINE" != "collab" ] && TARGETS+=("$MINE")
+  add_scope "(no session)" ""
+  add_scope "collab" "collab"
+  [ -n "$MINE" ] && [ "$MINE" != "collab" ] && add_scope "$MINE" "$MINE"
 fi
 
-HIT=$(mktemp -d "${TMPDIR:-/tmp}/amq-watch.XXXXXX") || exit 1
-PIDS=""
-# Job control, so each wait below becomes its own process group and can be killed WITH
-# the amq it is blocked on. Killing the subshell alone leaves that amq running: measured
-# — one orphaned `amq monitor` survived every watch, and they pile up all day.
-set -m
-cleanup() {
-  for p in $PIDS; do kill -TERM -- "-$p" 2>/dev/null || kill -TERM "$p" 2>/dev/null; done
-  rm -rf "$HIT"
-}
-trap cleanup EXIT INT TERM
+ids_in() { ls "$1" 2>/dev/null | grep '\.md$' || true; }
 
-# One wait per target. A timeout (4) is not an answer, so it is re-armed; anything else
-# is reported and ends the watch, because a wait that fails silently is worse than none.
-wait_on() {
-  local s="$1" label out rc
-  [ -n "$s" ] && label="$s" || label="(root: no session)"
-  while :; do
-    if [ -n "$s" ]; then out=$(cd "$DIR" && amq monitor --me "$ME" --session "$s" --peek --timeout "${TIMEOUT}s" 2>/dev/null)
-    else                 out=$(cd "$DIR" && amq monitor --me "$ME" --peek --timeout "${TIMEOUT}s" 2>/dev/null); fi
-    rc=$?
-    case $rc in
-      0) { echo "MAIL in $label:"; echo "$out"; } > "$HIT/out"; return 0 ;;
-      4) continue ;;
-      *) { echo "the watch on $label stopped, rc=$rc"; echo "$out"; } > "$HIT/out"; return "$rc" ;;
-    esac
+# The census. Everything already unread is NOT a reason to wake: it was here before the
+# wait began, and whatever it is, it is not the answer this window is waiting for.
+BASE=""; PRIOR=0; PRIOR_MINE=0
+i=0
+while [ $i -lt ${#DIRS[@]} ]; do
+  for f in $(ids_in "${DIRS[$i]}"); do
+    BASE="$BASE|$i:$f"
+    PRIOR=$((PRIOR+1))
+    [ "${NAMES[$i]}" = "$MINE" ] && PRIOR_MINE=$((PRIOR_MINE+1))
   done
-}
-
-for t in "${TARGETS[@]}"; do wait_on "$t" & PIDS="$PIDS $!"; done
-say "watching: $(for t in "${TARGETS[@]}"; do [ -n "$t" ] && printf '%s ' "$t" || printf '(root) '; done)· nothing is consumed"
-
-# `wait -n` would be the obvious way and needs bash 4.3; macOS still ships 3.2, and this
-# skill is handed to other people's machines. Polling a sentinel file costs two seconds
-# of latency on an event that is already asynchronous.
-while :; do
-  [ -f "$HIT/out" ] && break
-  alive=""
-  for p in $PIDS; do kill -0 "$p" 2>/dev/null && alive=1; done
-  [ -n "$alive" ] || break
-  sleep 2
+  i=$((i+1))
 done
 
-if [ -f "$HIT/out" ]; then cat "$HIT/out"; exit 0; fi
-say "every watch ended without mail"
-exit 1
+say "watching: $(printf '%s ' "${NAMES[@]}")· every ${INTERVAL}s · nothing is consumed"
+if [ "$PRIOR" -gt 0 ]; then
+  say "· $PRIOR message(s) were already unread when this started; they will NOT wake you."
+  if [ "$PRIOR_MINE" -gt 1 ]; then
+    say "  $PRIOR_MINE of them are in your own topic — read those now, they are yours."
+  elif [ "$PRIOR_MINE" -eq 1 ]; then
+    say "  One of them is in your own topic — read it now, it is yours."
+  else
+    say "  Nothing of yours among them; the rest is for whoever sorts the basket."
+  fi
+fi
+
+WAITED=0
+while :; do
+  sleep "$INTERVAL"
+  i=0
+  while [ $i -lt ${#DIRS[@]} ]; do
+    for f in $(ids_in "${DIRS[$i]}"); do
+      case "$BASE" in
+        *"|$i:$f"*) ;;                      # was already there — not a wake reason
+        *)
+          say "MAIL in ${NAMES[$i]}:"
+          python3 - "${DIRS[$i]}/$f" <<'PY' 2>/dev/null || echo "  ${f%.md}"
+import json, sys
+t = open(sys.argv[1], encoding="utf-8").read()
+fm = json.loads(t.split("---json", 1)[1].split("\n---", 1)[0]) if "---json" in t else {}
+def s(v, n=120):
+    v = " ".join(str(v if v is not None else "").split())
+    return (v[:n] + "…") if len(v) > n else v
+print("  from:    %s%s" % (s(fm.get("from")),
+      (" (project %s)" % s(fm.get("from_project"))) if fm.get("from_project") else ""))
+print("  subject: %s" % s(fm.get("subject") or "(no subject)"))
+print("  kind:    %s    priority: %s" % (s(fm.get("kind") or "-"), s(fm.get("priority") or "-")))
+print("  id:      %s" % s(fm.get("id") or ""))
+PY
+          exit 0 ;;
+      esac
+    done
+    i=$((i+1))
+  done
+  WAITED=$((WAITED+INTERVAL))
+  if [ "$LIMIT" -gt 0 ] && [ "$WAITED" -ge "$LIMIT" ]; then
+    say "nothing new in ${LIMIT}s"
+    exit 4
+  fi
+done

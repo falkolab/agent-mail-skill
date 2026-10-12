@@ -148,8 +148,14 @@ Start it as a background task — in Claude Code, the Bash tool with
 `run_in_background: true`; any other way it holds the turn for the whole wait. It consumes
 nothing — `--peek` leaves every message unread — and when it exits, the harness wakes the
 session to report the exit. The session then reads its mail the usual way.
-`--timeout <seconds>` sets how long one wait lasts before it is re-armed internally
-(default 900); `--session <name>` watches one topic instead.
+`--interval <seconds>` is how often it looks (default 3), `--timeout <seconds>` gives up
+after that long (default: never), `--session <name>` watches one topic instead.
+
+**Only mail that arrives after it starts wakes it.** Whatever is already unread is counted
+at the start, named, and then ignored — otherwise one stale message nobody ever sorted
+would make the watcher exit instantly, every time, for good: the window would look covered
+and be deaf. The count is printed when it starts, and says how much of it is the window's
+own.
 
 **One watcher covers one letter.** It exits when mail lands, so the window is uncovered
 until another is started; arming one belongs with collecting the mail. Claiming a topic
