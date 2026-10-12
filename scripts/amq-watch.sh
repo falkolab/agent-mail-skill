@@ -34,6 +34,10 @@ unset AM_ROOT AM_BASE_ROOT AM_ROOT_ID AM_BASE_ROOT_ID AM_SESSION AM_ME
 
 say() { echo "$@" >&2; }
 
+# Resolved before anything else: $0 may be relative to the caller's directory, and the
+# re-arm line below has to be a command that can be run as printed.
+SELF="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/$(basename "$0")"
+
 # The mailbox belongs to the REPOSITORY, not to a working copy: --git-common-dir from any
 # worktree returns the common directory, and .amqrc sits next to it.
 amq_repo_root() {
@@ -95,6 +99,19 @@ fi
 
 ids_in() { ls "$1" 2>/dev/null | grep '\.md$' || true; }
 
+# A watcher is spent once it has fired: it cannot start its own successor, because the
+# wake comes from the harness reporting the exit of a task the AGENT started, and a
+# process forked from here has no way back into the session. So the last thing it does is
+# ask for one — here, in the output that is certainly read, at the moment it is true. The
+# hook says the same, but the hook is silent on an empty inbox, and by the time the turn
+# ends the mail is usually collected: the window would be told to re-arm only by accident.
+rearm() {
+  say ""
+  say "This watcher has fired and is gone. Until another is running, this window hears"
+  say "nothing while it stands still. Start one — BACKGROUND task (run_in_background):"
+  say "  $SELF$REARM_ARGS"
+}
+
 # The census. Everything already unread is NOT a reason to wake: it was here before the
 # wait began, and whatever it is, it is not the answer this window is waiting for.
 BASE=""; PRIOR=0; PRIOR_MINE=0
@@ -107,6 +124,12 @@ while [ $i -lt ${#DIRS[@]} ]; do
   done
   i=$((i+1))
 done
+
+# The same watch, spelled out, so re-arming does not quietly narrow or widen it.
+REARM_ARGS=""
+[ -n "$ONE" ] && REARM_ARGS="$REARM_ARGS --session $ONE"
+[ "$INTERVAL" != "3" ] && REARM_ARGS="$REARM_ARGS --interval $INTERVAL"
+[ "$LIMIT" != "0" ] && REARM_ARGS="$REARM_ARGS --timeout $LIMIT"
 
 say "watching: $(printf '%s ' "${NAMES[@]}")· every ${INTERVAL}s · nothing is consumed"
 if [ "$PRIOR" -gt 0 ]; then
@@ -143,6 +166,7 @@ print("  subject: %s" % s(fm.get("subject") or "(no subject)"))
 print("  kind:    %s    priority: %s" % (s(fm.get("kind") or "-"), s(fm.get("priority") or "-")))
 print("  id:      %s" % s(fm.get("id") or ""))
 PY
+          rearm
           exit 0 ;;
       esac
     done
@@ -151,6 +175,7 @@ PY
   WAITED=$((WAITED+INTERVAL))
   if [ "$LIMIT" -gt 0 ] && [ "$WAITED" -ge "$LIMIT" ]; then
     say "nothing new in ${LIMIT}s"
+    rearm
     exit 4
   fi
 done
