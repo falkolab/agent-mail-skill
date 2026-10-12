@@ -55,7 +55,39 @@ c=json.load(open(sys.argv[1]+'/.amqrc'))
 print('\t'.join([c.get('root','.agent-mail'), c.get('handle','')]))" "$DIR")"
 case "$ROOT" in /*) RP="$ROOT" ;; *) RP="$DIR/$ROOT" ;; esac
 [ -n "$ME" ] || { echo "no handle in .amqrc" >&2; exit 3; }
-[ -n "$SESSION" ] || SESSION=collab
+# Find the message before claiming anything. This used to default to collab and read
+# from "$RP/collab" whatever the id was — so a message sent with no session, which lives
+# in the base root, could not be read at all. The claim was written first and never
+# withdrawn, so the read failed, the script still said "claimed", and the message stayed
+# unread behind a claim no window could ever release. One sat like that for eleven days.
+SCOPE=""; SCOPE_ROOT=""
+find_scope() {
+  local d b s
+  if [ -n "$SESSION" ]; then                       # an explicit --session is an answer
+    [ "$SESSION" = "(root)" ] || [ "$SESSION" = "root" ] \
+      && { SCOPE="root"; SCOPE_ROOT="$RP"; } \
+      || { SCOPE="$SESSION"; SCOPE_ROOT="$RP/$SESSION"; }
+    return 0
+  fi
+  for b in new cur; do
+    [ -f "$RP/agents/$ME/inbox/$b/$MSG.md" ] && { SCOPE="root"; SCOPE_ROOT="$RP"; return 0; }
+  done
+  for d in "$RP"/*/; do
+    [ -d "$d" ] || continue
+    s=${d%/}; s=${s##*/}
+    case "$s" in meta|threads|agents) continue ;; esac
+    for b in new cur; do
+      [ -f "${d}agents/$ME/inbox/$b/$MSG.md" ] && { SCOPE="$s"; SCOPE_ROOT="${d%/}"; return 0; }
+    done
+  done
+  return 1
+}
+find_scope || {
+  echo "no message $MSG in this mailbox (looked in the root and every session)" >&2
+  echo "  $RP" >&2
+  exit 3
+}
+SESSION="$SCOPE"
 # Same key as amq-use.sh: the harness session id, terminal only as a last
 # resort. A literal "unknown" would make every window outside the app share
 # one key, and claims between them would not be separated at all.
@@ -95,7 +127,18 @@ if [ "$STATE" = "BUSY" ]; then
   fi
   echo "(already claimed by this window, continuing)" >&2
 fi
-amq read --root "$RP/$SESSION" --me "$ME" --id "$MSG"
+# The read is what makes the claim mean anything. If it fails, the claim must go with
+# it — otherwise the message is locked to a window that never got it. Only a claim THIS
+# run created is withdrawn; one we merely re-entered belongs to an earlier run.
+# Status taken from the command itself: inside `if ! cmd`, $? is the NEGATED status, so
+# a failed read reported 0 and the script went on claiming success — the very thing being
+# fixed here.
+amq read --root "$SCOPE_ROOT" --me "$ME" --id "$MSG"; rc=$?
+if [ "$rc" -ne 0 ]; then
+  [ "$STATE" = "OK" ] && rm -f "$RP/.claims/${SESSION}__$(printf '%s' "$MSG" | tr -c 'A-Za-z0-9._-' '_')" 2>/dev/null
+  echo "could not read $MSG from $SCOPE_ROOT (rc=$rc); the claim was withdrawn" >&2
+  exit "$rc"
+fi
 echo
-echo "(claimed by window $WIN; reply with:" >&2
+echo "(claimed by window $WIN from ${SCOPE}; reply with:" >&2
 echo "   $(cd "$(dirname "$0")" && pwd)/amq-send.sh reply --id $MSG --kind answer --body \"...\")" >&2
