@@ -111,9 +111,13 @@ Measured on 0.80.1.
 amq-watch.sh [--session <name>] [--timeout <seconds>]
 ```
 Waits on all three scopes at once and exits as soon as anything arrives, printing what
-landed; consumes nothing. Meant to be started as a background task — the point is the
-exit, which is what wakes a window that is sitting idle. A window where somebody is
-working needs none of this: the hooks report the inbox on every prompt.
+landed; consumes nothing. **Start it as a background task** — in Claude Code, the Bash
+tool with `run_in_background: true`. Any other way it holds the turn for the whole wait.
+The point is the exit: that is what wakes a window standing idle.
+
+**It exits on the first letter.** Arm another once the mail is collected, or the window is
+uncovered again. Claiming a topic and collecting mail both print the reminder, because
+those are the two moments it is needed.
 
 **A send without `--session` lands in the mailbox ROOT, not in a topic**, and
 `amq session list` does not report the root — so such mail was invisible to the hook and

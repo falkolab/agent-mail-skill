@@ -167,6 +167,16 @@ printf '%s' "$SESSION" > "$STATE" 2>/dev/null || say "warning: could not write $
 say "window claimed the topic: $SESSION"
 say "neighbours should address it as: --session $SESSION"
 say ""
+# Printed here, not only in the skill, because this is the moment it has to happen: the
+# window is alive, it has just taken a topic, and in a minute it will be standing still
+# with nothing able to reach it.
+say "NOW ARM THE WATCHER, as a BACKGROUND task (in Claude Code: run_in_background):"
+say "  $HERE/amq-watch.sh"
+say "Run any other way it holds the turn for the whole wait. Without it this window hears"
+say "nothing while it stands still: the hooks fire on what the window DOES, and a window"
+say "waiting for an answer does nothing. It exits on the first letter — start another once"
+say "you have taken your mail."
+say ""
 say "Reading needs no pin — --session works from any shell:"
 say "  amq list  --session $SESSION --me $ME --new"
 say "  amq drain --session $SESSION --me $ME --include-body --limit 0"
