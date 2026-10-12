@@ -101,6 +101,20 @@ amq-log.sh --body                   # bodies, reads the files directly (see belo
 
 `--poll` is the fallback instead of fsnotify (network filesystems).
 
+**Each scope is watched separately and none contains another.** `amq monitor` with no
+`--session` returns only mail sent without a session; `--session collab` only the basket;
+`--session <topic>` only that topic. On a scope holding no mail it returns `4`, exactly as
+it would on an empty mailbox, so one watcher looks healthy while missing most of the post.
+Measured on 0.80.1.
+
+```bash
+amq-watch.sh [--session <name>] [--timeout <seconds>]
+```
+Waits on all three scopes at once and exits as soon as anything arrives, printing what
+landed; consumes nothing. Meant to be started as a background task — the point is the
+exit, which is what wakes a window that is sitting idle. A window where somebody is
+working needs none of this: the hooks report the inbox on every prompt.
+
 **A send without `--session` lands in the mailbox ROOT, not in a topic**, and
 `amq session list` does not report the root — so such mail was invisible to the hook and
 to everyone, while the sender saw `Sent`. The hook now lists the root explicitly and shows
