@@ -1,6 +1,6 @@
 # AMQ — command reference
 
-Flags checked against `amq 0.80.1 --help` and verified by running them against disposable
+Flags checked against `amq 0.96.1 --help` and verified by running them against disposable
 mailboxes in three layouts: an ordinary checkout, a bare repository with worktrees, and a
 mailbox in a plain directory outside any repository. A single dash in the help output
 (`-me`) and a double one (`--me`) are equivalent; below it is always double.
@@ -105,7 +105,7 @@ amq-log.sh --body                   # bodies, reads the files directly (see belo
 `--session` returns only mail sent without a session; `--session collab` only the basket;
 `--session <topic>` only that topic. On a scope holding no mail it returns `4`, exactly as
 it would on an empty mailbox, so one watcher looks healthy while missing most of the post.
-Measured on 0.80.1.
+Measured on 0.96.1.
 
 ```bash
 amq-watch.sh [--session <name>] [--interval <seconds>] [--timeout <seconds>]
@@ -141,11 +141,24 @@ needed. Use the wrapper rather than `amq reply` directly: `reply` has no `--sess
 so from an unpinned shell it needs `--root`, and that writes an empty `reply_to` — the
 answer arrives with no return address.
 
-**Pinning, measured on 0.80.1 from an unpinned shell:** `list --session` and
-`drain --session` work; `send --session` is refused (`--session requires a session
-context`); `send --root` and `reply --root` succeed with `reply_to: None`. A shell pinned
-to the base root instead of a topic yields `reply_to: <handle>@collab` — the wrong window.
-`amq-use.sh` claims a topic for the hook only; it does not pin amq.
+**Pinning, measured on 0.96.1 from an unpinned shell:** `list --session` and
+`drain --session` work; `send --session` inside your own project is refused
+(`--session requires a session context`); `send --root` and `reply --root` succeed with
+`reply_to: None`. A shell pinned to the base root instead of a topic yields
+`reply_to: <handle>@collab` — the wrong window. `amq-use.sh` claims a topic for the hook
+only; it does not pin amq.
+
+**A cross-project `send --project --session` is NOT refused unpinned** — it succeeds, and
+writes `reply_to: <handle>` with no topic after it. That is a return address nobody can
+answer: the reply has a handle and no mailbox. The refusal only guards the same-project
+form, so an unpinned shell fails loudly in one direction and quietly in the other. Hence
+the wrapper.
+
+**Unknown handle, from a PINNED shell:** without `--strict` the send returns `0`, prints a
+warning, and creates `<your-topic>/agents/<that-name>/inbox/` inside the SENDER's own
+mailbox with the message in it. With `--strict` it refuses, `rc=1`, and creates nothing.
+Unpinned the same send is stopped earlier, by the pin check, which is why the trap only
+shows up once everything else is working.
 
 A claim never expires: on disk an idle window and a dead one look the same, so expiry
 would take a working window's mailbox away from it. Give a topic up with
@@ -291,7 +304,7 @@ amq cleanup             # tmp, quarantine, recovery artifacts
 When pinned to a topic, `amq doctor` prints `⚠ Config: config.json not found`: the
 registry lives in the base root, while a pinned doctor looks for it in the topic root.
 This is not a breakage — on the base root the same command gives
-`✓ Config: agents: [...]`. Verified on 0.80.1.
+`✓ Config: agents: [...]`. Verified on 0.96.1.
 
 `amq doctor` will complain `claude skill: not installed` — it is looking for the
 **upstream** skill installed through `npx skills`. This one is not that; the warning is

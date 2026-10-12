@@ -178,7 +178,7 @@ the message cannot even be answered. **Always send with `--strict`**, which refu
 `amq session list --root <peer>/.agent-mail --json` first. A missed name is a
 non-delivery. (`amq who --json` is the obvious-looking choice and is **unreliable**: in
 repositories that have a `.claude/agents/` directory it returns `null` with exit code 0 —
-success-looking, and empty. Verified on 0.80.1 in two repositories that have a
+success-looking, and empty. Verified on 0.96.1 in two repositories that have a
 `.claude/agents/` directory; `amq session list` returned the real topics in the same
 moment.)
 
