@@ -109,10 +109,16 @@ Measured on 0.96.1.
 
 ```bash
 amq-watch.sh [--session <name>] [--interval <seconds>] [--timeout <seconds>]
+            [--ignore-backlog]
 ```
 Waits on all three scopes at once and exits as soon as something NEW arrives, printing
 what landed; consumes nothing, and runs no subprocess while waiting — it reads the inbox
 directories the way `amq-peek.sh` reads a message.
+
+**It refuses to start while your OWN topic has unread mail** (`rc=6`), because such a
+watcher is deaf by construction: that mail is in its census and can never wake it. Read
+the backlog and start one over an empty topic, or `--ignore-backlog` if you mean to leave
+it. Mail in `collab` or the root is not yours to read and does not stop it.
 
 **Mail that was already unread does not wake it.** It is counted at the start, reported,
 and then ignored. `amq monitor` makes no such distinction: it returns on any unread

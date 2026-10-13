@@ -6,6 +6,7 @@
 #   amq-watch.sh --session <name>   # one named topic instead
 #   amq-watch.sh --interval 5       # how often the mailbox is looked at (default 3s)
 #   amq-watch.sh --timeout 3600     # give up after this long (default: wait forever)
+#   amq-watch.sh --ignore-backlog   # start even with your own mail unread
 #
 # Why this exists: the delivery hooks fire on things the WINDOW does — session start, a
 # user prompt, the end of a turn. A window where nothing is happening runs no hooks, so a
@@ -57,12 +58,13 @@ amq_repo_root() {
   return 1
 }
 
-INTERVAL=3; LIMIT=0; ONE=""
+INTERVAL=3; LIMIT=0; ONE=""; ANYWAY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --session)  ONE="$2"; shift 2 ;;
     --interval) INTERVAL="$2"; shift 2 ;;
     --timeout)  LIMIT="$2"; shift 2 ;;
+    --ignore-backlog) ANYWAY=1; shift ;;
     -h|--help)  sed -n '2,8p' "$0"; exit 0 ;;
     *) say "unknown argument: $1"; exit 2 ;;
   esac
@@ -130,6 +132,22 @@ REARM_ARGS=""
 [ -n "$ONE" ] && REARM_ARGS="$REARM_ARGS --session $ONE"
 [ "$INTERVAL" != "3" ] && REARM_ARGS="$REARM_ARGS --interval $INTERVAL"
 [ "$LIMIT" != "0" ] && REARM_ARGS="$REARM_ARGS --timeout $LIMIT"
+
+# Refusing, rather than advising. Saying "read those now" was advice in a line of output,
+# and a window armed a watcher over four unread messages of its own, then stood there with
+# a healthy watcher and mail that by definition could never wake it. The watcher exists so
+# a window is not deaf; starting one on top of unread mail makes it deaf and certain.
+# Exiting here is self-correcting: the exit wakes the session, which reads the backlog and
+# arms a watcher over an empty topic.
+if [ "$PRIOR_MINE" -gt 0 ] && [ -z "$ANYWAY" ]; then
+  say "refusing: $PRIOR_MINE message(s) already unread in your own topic${MINE:+ ($MINE)}."
+  say "A watcher started now would never tell you about them — it wakes on what ARRIVES,"
+  say "and these are already here. Read them, then start one:"
+  say "  amq drain --session ${MINE:-<topic>} --me $ME --include-body --limit 0"
+  say "  $SELF$REARM_ARGS"
+  say "If you truly mean to leave them, pass --ignore-backlog."
+  exit 6
+fi
 
 say "watching: $(printf '%s ' "${NAMES[@]}")· every ${INTERVAL}s · nothing is consumed"
 if [ "$PRIOR" -gt 0 ]; then

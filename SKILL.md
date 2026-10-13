@@ -287,8 +287,11 @@ because none of them contains the others.
 
 **Only what arrives after it starts wakes it.** Anything already unread is counted, named
 and ignored, so a stale message nobody sorted cannot make the watcher exit on the spot
-and leave the window deaf. If that count says something is in YOUR topic, read it now —
-the watcher will not tell you about it again.
+and leave the window deaf.
+
+**So it refuses to start while your own topic has unread mail** (`rc=6`): that mail is in
+its census and would never wake you. Take your mail first, then arm it. `--ignore-backlog`
+overrides, and mail in `collab` or the root never stops it — that is not yours to read.
 
 **Done with the topic?** `amq-use.sh --release` gives it up and puts the window back in
 the shared `collab`. The topic keeps its mail and its description. It refuses while there
