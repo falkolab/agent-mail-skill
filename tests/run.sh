@@ -215,7 +215,8 @@ case_watch_census() {
   local a out pid
   a=$(mk pa)
   ( cd "$a" && AMQ_WINDOW=w1 "$S/amq-use.sh" "topic one" --about x >/dev/null 2>&1 )
-  seed "$a/.agent-mail" "topic-one" "pa-claude" old "body-OLD"
+  # in the basket, not in this window's topic: own unread mail is a refusal, tested separately
+  seed "$a/.agent-mail" "collab" "pa-claude" old "body-OLD"
   ( cd "$a" && AMQ_WINDOW=w1 "$S/amq-watch.sh" --interval 1 --timeout 6 > "$TMP/w.out" 2>&1 ) &
   pid=$!
   sleep 3
@@ -227,7 +228,29 @@ case_watch_census() {
   is  "a new message ends the wait" "$rc" "0"
   has "and is reported" "$out" "MAIL in topic-one"
   has "with a request for a successor" "$out" "Start one"
-  is  "nothing was consumed" "$(count "$a/.agent-mail/topic-one/agents/pa-claude/inbox/new")" "2"
+  is  "nothing was consumed" "$(count "$a/.agent-mail/topic-one/agents/pa-claude/inbox/new")" "1"
+  is  "and neither was the basket" "$(count "$a/.agent-mail/collab/agents/pa-claude/inbox/new")" "1"
+}
+
+# A watcher started over the window's own unread mail is deaf by construction: that mail
+# is in its census and can never wake it. A window did exactly this and then stood there
+# with four of its own messages unread and a watcher that looked healthy.
+case_watch_backlog() {
+  local a out rc
+  a=$(mk pa)
+  ( cd "$a" && AMQ_WINDOW=w1 "$S/amq-use.sh" "topic one" --about x >/dev/null 2>&1 )
+  seed "$a/.agent-mail" "topic-one" "pa-claude" mine "body-MINE"
+  out=$( cd "$a" && AMQ_WINDOW=w1 "$S/amq-watch.sh" --interval 1 --timeout 4 2>&1 ); rc=$?
+  is  "it refuses over your own unread mail" "$rc" "6"
+  has "and says how to clear it" "$out" "amq drain --session topic-one"
+  has "and how to override" "$out" "--ignore-backlog"
+  out=$( cd "$a" && AMQ_WINDOW=w1 "$S/amq-watch.sh" --interval 1 --timeout 2 --ignore-backlog 2>&1 ); rc=$?
+  is  "--ignore-backlog starts anyway" "$rc" "4"
+  has "and still names the backlog" "$out" "already unread"
+  ( cd "$a" && amq drain --session topic-one --me pa-claude --limit 0 >/dev/null 2>&1 )
+  seed "$a/.agent-mail" "collab" "pa-claude" theirs "body-THEIRS"
+  out=$( cd "$a" && AMQ_WINDOW=w1 "$S/amq-watch.sh" --interval 1 --timeout 2 2>&1 ); rc=$?
+  is  "but the basket alone does not stop it" "$rc" "4"
 }
 
 # The hook is what every window reads every turn; its branches are the contract.
@@ -294,6 +317,7 @@ run_case "claiming a message in any scope"      claim_scopes
 run_case "a claim whose read failed"            claim_failed_read
 run_case "looking without taking"               peek
 run_case "the watcher wakes on arrivals only"   watch_census
+run_case "a watcher over your own backlog"      watch_backlog
 run_case "what the hook tells a window"         hook
 run_case "a claim nobody renewed"               hook_stale_claim
 run_case "amq's own behaviour"                  amq_scopes
