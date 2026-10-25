@@ -9,8 +9,9 @@
 # phantom inbox inside YOUR OWN mailbox, prints "Sent", and delivers nothing. The topic
 # has to exist, and a window that claimed one sees only a count for mail left in collab.
 #
-# `amq who --json` is the obvious way to look this up and is unreliable: in a repository
-# with a .claude/agents directory it returns null with exit code 0.
+# `amq who --json` is the obvious way to look this up, and up to 0.96.1 it returned null
+# with exit code 0 in any repository with a .claude/agents directory. 0.113.1 fixes it and
+# changes the shape at the same time. `session list` has meant one thing throughout.
 set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH"
 

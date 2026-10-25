@@ -23,7 +23,7 @@ frontmatter written into the recipient's directory.
 
 ## Requirements
 
-- `amq` — `brew install avivsinai/tap/amq`. Written against **0.96.1**; the hook says so
+- `amq` — `brew install avivsinai/tap/amq`. Written against **0.113.1**; the hook says so
   once if the installed version differs.
 - `git`, `python3`, `bash`.
 - Claude Code, for the hooks. The scripts themselves work without it.

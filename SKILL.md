@@ -178,7 +178,10 @@ the message cannot even be answered. **Always send with `--strict`**, which refu
 `amq session list --root <peer>/.agent-mail --json` first. A missed name is a
 non-delivery. (`amq who --json` is the obvious-looking choice and is **unreliable**: in
 repositories that have a `.claude/agents/` directory it returns `null` with exit code 0 —
-success-looking, and empty. Verified on 0.96.1 in two repositories that have a
+success-looking, and empty. That was true up to 0.96.1 and is fixed in 0.113.1, which
+returns the real list; the advice stands anyway, because `session list` answers the
+question directly and is the same one command on every version. Verified in two
+repositories that have a
 `.claude/agents/` directory; `amq session list` returned the real topics in the same
 moment.)
 
@@ -195,8 +198,8 @@ python3 -c 'import json;print(json.load(open(".amqrc")).get("peers",{}))'
 cd <repo> && eval "$(amq env --session <topic> --me <own-handle>)"
 
 # 2. get the address — handle, project and topic, ready to paste. Do not guess any of
-#    them, and do not use `amq who --json`: it returns null with exit code 0 in a
-#    repository that has a .claude/agents directory.
+#    them. `amq who --json` is not the tool for it: up to 0.96.1 it returned null with
+#    exit code 0 in a repository that has a .claude/agents directory.
 amq-address.sh <neighbour-name>
 
 # 3. send what it printed. --strict is part of the address, not an option:

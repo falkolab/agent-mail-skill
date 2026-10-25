@@ -1,6 +1,6 @@
 # AMQ — command reference
 
-Flags checked against `amq 0.96.1 --help` and verified by running them against disposable
+Flags checked against `amq 0.113.1 --help` and verified by running them against disposable
 mailboxes in three layouts: an ordinary checkout, a bare repository with worktrees, and a
 mailbox in a plain directory outside any repository. A single dash in the help output
 (`-me`) and a double one (`--me`) are equivalent; below it is always double.
@@ -105,7 +105,7 @@ amq-log.sh --body                   # bodies, reads the files directly (see belo
 `--session` returns only mail sent without a session; `--session collab` only the basket;
 `--session <topic>` only that topic. On a scope holding no mail it returns `4`, exactly as
 it would on an empty mailbox, so one watcher looks healthy while missing most of the post.
-Measured on 0.96.1.
+Measured on 0.113.1.
 
 ```bash
 amq-watch.sh [--session <name>] [--interval <seconds>] [--timeout <seconds>]
@@ -147,7 +147,7 @@ needed. Use the wrapper rather than `amq reply` directly: `reply` has no `--sess
 so from an unpinned shell it needs `--root`, and that writes an empty `reply_to` — the
 answer arrives with no return address.
 
-**Pinning, measured on 0.96.1 from an unpinned shell:** `list --session` and
+**Pinning, measured on 0.113.1 from an unpinned shell:** `list --session` and
 `drain --session` work; `send --session` inside your own project is refused
 (`--session requires a session context`); `send --root` and `reply --root` succeed with
 `reply_to: None`. A shell pinned to the base root instead of a topic yields
@@ -260,9 +260,13 @@ the shared basket. Exit `3` means the id is not in this mailbox.
 The frontmatter carries more than `amq list --json` returns: `to[]`, `from_project`,
 `reply_to` and `refs` exist only there.
 
-`amq who --json` is **unreliable** for discovering a neighbour's topics: in repositories
-with a `.claude/agents/` directory it returns `null` with exit code 0. Use
-`amq session list --root <peer>/.agent-mail --json` instead.
+**Use `amq session list --root <peer>/.agent-mail --json` to discover a neighbour's
+topics**, not `amq who --json`. Up to 0.96.1 `who --json` returned `null` with exit code 0
+in any repository that had a `.claude/agents/` directory — success-looking and empty.
+0.113.1 fixes that, and also changes the shape: the first element is now the base root
+with an empty `name` and `scope`/`root` fields, and each agent carries
+`registration_status` and `mailbox_status`. `session list` answers the question directly
+and reads the same on every version, so it stays the instruction.
 
 ## Addressing a neighbour
 
@@ -311,12 +315,16 @@ amq receipts list --me <handle>   # delivery receipts
 # check that passed and found everything clean. The subcommand is mandatory.
 amq trace               # evidence for a message
 amq cleanup             # tmp, quarantine, recovery artifacts
+amq cleanup --mailbox <handle> --root <root>    # 0.99+: delete one agent's mailbox
+# Removes <root>/agents/<handle> with its read history, outbox and receipts, and refuses
+# (exit 6) while anything there is unread. This is how a phantom inbox is cleared — the
+# one an unstrict send to an unknown handle creates inside the SENDER's own mailbox.
 ```
 
 When pinned to a topic, `amq doctor` prints `⚠ Config: config.json not found`: the
 registry lives in the base root, while a pinned doctor looks for it in the topic root.
 This is not a breakage — on the base root the same command gives
-`✓ Config: agents: [...]`. Verified on 0.96.1.
+`✓ Config: agents: [...]`. Verified on 0.113.1.
 
 `amq doctor` will complain `claude skill: not installed` — it is looking for the
 **upstream** skill installed through `npx skills`. This one is not that; the warning is
